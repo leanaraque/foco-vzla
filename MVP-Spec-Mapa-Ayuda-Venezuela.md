@@ -724,7 +724,48 @@ La vista pública **no** usa un `onSnapshot` abierto para todos los documentos. 
 
 **Fuera de alcance (Fase 2b, NO construir):** centros de ayuda, listas de edificios, deduplicación, SMS/WhatsApp.
 
-### 22.8 (se completa al final de la construcción: patrón de costo, modelo de datos nuevo, medición de bundle y resultados de tests)
+### 22.8 Implementación — modelo de datos, control de costo, bundle y tests
+
+**Modelo de datos (cambios sobre §4):**
+```
+Necesidad (doc PÚBLICO, legible por cualquiera con App Check)
+  … (campos previos) …
+  verificacion     # no_verificada | confirmada | pendiente_revision | verificada(legacy)
+  confirmaciones   # number — contador denormalizado (lo mantiene la Cloud Function)
+  creador          # uid anónimo (D8) — ahora público en todos los estados (ver nota)
+
+Necesidad/{id}/confirmaciones/{uid}   # validación por multitud
+  creador          # == uid del autor; el id del doc ES el uid → una por uid
+  creada_en
+```
+*Nota de privacidad:* con la lectura pública (pivote), `creador` (uid anónimo) queda visible para necesidades en cualquier estado, no solo verificadas. Sigue siendo un uid anónimo, no PII; la mitigación de **D8/§9-1** se mantiene y se revisará en Fase 2b si la correlación resulta dañina.
+
+**Patrón de control de costo (§6.2-r1) elegido — vista pública:**
+- **Lectura puntual paginada con caché-primero**, NO `onSnapshot`. `leerNecesidadesPublicas()` intenta `getDocsFromCache` (0 lecturas facturables); solo va al servidor en frío o en **refresco manual** (botón con *cooldown* de 15 s). `limit(25)`.
+- El **contador de confirmaciones** se denormaliza en el doc padre (lo mantiene la función) → la vista pública nunca lee la subcolección entera (evita N lecturas por ítem).
+- *Escalada* documentada para Fase 2b: *bundles* de Firestore servidos por CDN si el tráfico lo exige.
+
+**Validación por multitud — dónde vive cada parte:**
+- *Anti-duplicado (una confirmación por uid)* → **rules** (`confirmaciones/{id==uid}`, create-once, inmutable) + **tests**.
+- *Contador + transición no_verificada→confirmada con N sensible a densidad* → **Cloud Function** `onConfirmacion` (Admin SDK, no manipulable por cliente). N ∈ [2,4] según densidad por prefijo de geohash (sector).
+- *Salvaguarda del aislado* → **Cloud Function programada** `marcarAislados` (no_verificada vieja → `pendiente_revision`) + **UI** que lo ordena primero con badge. Nunca se oculta ni descarta.
+
+**Formulario de coordinadores → Resend:**
+- `solicitarCoordinador` (callable, `enforceAppCheck`) envía email a `hey@leanaraque.com`. La **key vive en Secret Manager** (`RESEND_API_KEY`), nunca en cliente/repo. Rate-limit server-side (1/min por uid) + en cliente.
+
+**Medición de bundle (gzip, inicial = no-lazy):**
+
+| Chunk | Antes | Después | Nota |
+|---|---|---|---|
+| app (`index`) | 18.99 KB | **24.77 KB** | +5.8 KB: vista Mapa + form + confirmar |
+| css | 1.79 KB | 2.15 KB | +0.36 KB |
+| firebase | 140.49 KB | 140.87 KB | ~igual |
+| **firebase/functions** | — | (3.82 KB) | **diferido** (solo al postularse) |
+| leaflet | (43.60 KB) | (43.60 KB) | **diferido** (solo al abrir mapa) |
+
+Sin librerías nuevas pesadas; lazy-load del mapa y del SDK de functions preservado (§6.3).
+
+**Tests ejecutados:** `9 unit` (payload) + `34 rules` (incluye 8 de validación por multitud: confirmar una vez por uid, no duplicar, no suplantar, contador no editable por cliente, y **aislado visible**). Salida en el commit y reproducible con `npm run test:unit` y el emulador.
 
 ### 22.9 Condiciones de lanzamiento (heredadas + nuevas)
 
