@@ -5,6 +5,7 @@
   import { suscribirNecesidades } from '../lib/db.js';
   import NeedCard from '../components/NeedCard.svelte';
   import MapView from '../components/MapView.svelte';
+  import CoordinatorForm from '../components/CoordinatorForm.svelte';
 
   const categorias = ['rescate', 'medico', 'agua', 'alimento', 'refugio', 'otro'];
   const urgencias = ['critica', 'alta', 'media'];
@@ -57,6 +58,7 @@
   {:else if !$esCoordinador && !demo}
     <!-- Acceso de coordinador (rol por custom claim; alta controlada) -->
     <h1>{$t('auth.coord_titulo')}</h1>
+    <p class="intro-seg">{$t('intro.panel')}</p>
     {#if errorLogin}<div class="aviso-error" role="alert">{errorLogin}</div>{/if}
     <label for="email">{$t('auth.email')}</label>
     <input id="email" type="email" bind:value={email} autocomplete="username" />
@@ -67,6 +69,9 @@
     {#if $user && !$esCoordinador && $user.email}
       <p class="ayuda" style="margin-top:1rem">{$t('auth.no_coord')}</p>
     {/if}
+
+    <!-- Formulario de postulación de coordinadores (§22.7-4) -->
+    <CoordinatorForm />
 
   {:else}
     {#if demo}

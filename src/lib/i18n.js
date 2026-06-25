@@ -6,14 +6,43 @@ import { writable, derived } from 'svelte/store';
 const diccionarios = {
   es: {
     'app.nombre': 'FOCO',
-    'app.tagline': 'Coordinación de ayuda ciudadana',
+    'app.tagline': 'Ayuda mutua entre vecinos',
 
-    'banner.aviso': 'Esto coordina ayuda ciudadana; no es un servicio de emergencia. Ante peligro inmediato, contacte a las líneas oficiales.',
+    // Reencuadre §9-2 / §22.7-1: ayuda mutua, NO rescate; nadie garantiza acudir.
+    'banner.aviso': 'FOCO es ayuda mutua entre vecinos, no un servicio de rescate: nadie garantiza que alguien acuda. Ante peligro inmediato, contacta a las líneas oficiales.',
     'banner.oficiales': 'Líneas oficiales',
 
+    'nav.mapa': 'Mapa',
     'nav.reportar': 'Reportar',
     'nav.panel': 'Panel',
     'nav.recursos': 'Recursos',
+
+    // Microcopy: una línea por segmento (§22.7-6)
+    'intro.mapa': 'Mira las necesidades de tu zona y confirma las que sean reales. Entre vecinos nos validamos y nos ayudamos.',
+    'intro.reportar': 'Reporta una necesidad tuya o de alguien cerca, en menos de un minuto. No promete rescate: la ven otros vecinos.',
+    'intro.panel': 'Acceso para coordinadores verificados. ¿Coordinas ayuda? Postúlate abajo.',
+    'intro.recursos': 'Ofrece lo que tengas (agua, transporte, refugio…) para que un vecino lo encuentre.',
+
+    // Vista pública del mapa (§22.7-2)
+    'mapa.titulo': 'Necesidades cerca de ti',
+    'mapa.lista': 'Lista',
+    'mapa.mapa': 'Mapa',
+    'mapa.actualizar': 'Actualizar',
+    'mapa.actualizando': 'Actualizando…',
+    'mapa.desde_cache': 'Mostrando datos guardados. Pulsa Actualizar para lo último.',
+    'mapa.vacio': 'No hay necesidades para mostrar todavía.',
+    'mapa.sector_aviso': 'Ubicación aproximada a nivel de sector para proteger a las personas.',
+    'mapa.confirmar': 'Confirmar que esto es real',
+    'mapa.confirmando': 'Confirmando…',
+    'mapa.ya_confirmaste': 'Ya confirmaste esta necesidad. Gracias.',
+    'mapa.confirmaciones': 'confirmaciones',
+    'mapa.como_ayudar': '¿Cómo ayudar?',
+    'mapa.como_ayudar_texto': 'Si puedes acercarte o aportar lo que se pide, hazlo con cuidado y en coordinación con otros vecinos. FOCO no organiza el rescate ni garantiza respuesta.',
+    'mapa.cerrar': 'Cerrar',
+    'mapa.revisar': 'Caso prioritario — pendiente de revisión del operador',
+
+    'verif.confirmada': 'Confirmada por vecinos',
+    'verif.pendiente_revision': 'Prioritario · por revisar',
 
     'cat.rescate': 'Rescate',
     'cat.medico': 'Médico',
@@ -73,6 +102,20 @@ const diccionarios = {
     'recursos.registrar': 'Registrar un recurso',
     'recursos.vacio': 'Aún no hay recursos registrados.',
     'recursos.disponible': 'Disponible',
+
+    'coordform.titulo': '¿Coordinas ayuda? Postúlate',
+    'coordform.intro': 'Si organizas ayuda con una brigada, ONG o grupo vecinal, cuéntanos y te habilitamos como coordinador verificado.',
+    'coordform.nombre': 'Nombre',
+    'coordform.org': 'Organización o grupo',
+    'coordform.zona': 'Zona donde operas',
+    'coordform.contacto': 'Contacto (correo o teléfono)',
+    'coordform.motivo': '¿Cómo ayudas? (breve)',
+    'coordform.enviar': 'Enviar postulación',
+    'coordform.enviando': 'Enviando…',
+    'coordform.ok': '¡Gracias! Recibimos tu postulación y te contactaremos.',
+    'coordform.error': 'No se pudo enviar. Intenta de nuevo en un momento.',
+    'coordform.faltan': 'Completa al menos nombre, zona y contacto.',
+    'coordform.espera': 'Espera un momento antes de enviar otra vez.',
 
     'auth.coord_titulo': 'Acceso de coordinador',
     'auth.email': 'Correo',

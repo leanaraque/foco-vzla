@@ -3,9 +3,12 @@
   import { t } from './lib/i18n.js';
   import { online } from './lib/stores.js';
   import EmergencyBanner from './components/EmergencyBanner.svelte';
+  import Mapa from './routes/Mapa.svelte';
   import Reportar from './routes/Reportar.svelte';
   import Panel from './routes/Panel.svelte';
   import Recursos from './routes/Recursos.svelte';
+
+  const REPO = 'https://github.com/leanaraque/foco-vzla';
 
   // Router mínimo por pathname (sin dependencia). Hosting reescribe a index.html.
   let ruta = window.location.pathname;
@@ -25,32 +28,39 @@
   });
 
   const nav = [
+    { p: '/mapa', k: 'nav.mapa' },
     { p: '/reportar', k: 'nav.reportar' },
-    { p: '/panel', k: 'nav.panel' },
-    { p: '/recursos', k: 'nav.recursos' }
+    { p: '/recursos', k: 'nav.recursos' },
+    { p: '/panel', k: 'nav.panel' }
   ];
 
   $: vista =
+    ruta.startsWith('/reportar') ? 'reportar' :
     ruta.startsWith('/panel') ? 'panel' :
     ruta.startsWith('/recursos') ? 'recursos' :
-    'reportar'; // raíz e desconocido → reportar (camino del afectado)
+    'mapa'; // raíz e desconocido → mapa público (entrada del pivote §22)
 </script>
 
 <header class="cab">
-  <a href="/reportar" class="marca" on:click={(e) => navegar('/reportar', e)}>
+  <a href="/mapa" class="marca" on:click={(e) => navegar('/mapa', e)}>
     <img src="/favicon.svg" alt="" width="28" height="28" />
     <span>{$t('app.nombre')}</span>
   </a>
-  {#if !$online}
-    <span class="offline" title={$t('comun.sin_conexion')}>● {$t('comun.sin_conexion')}</span>
-  {/if}
+  <div class="cab-der">
+    {#if !$online}
+      <span class="offline" title={$t('comun.sin_conexion')}>● {$t('comun.sin_conexion')}</span>
+    {/if}
+    <a class="repo" href={REPO} target="_blank" rel="noopener" title="Código abierto en GitHub" aria-label="Repositorio en GitHub">&lt;/&gt;</a>
+  </div>
 </header>
 
 <!-- Banner permanente (Spec §5 y DoD §8): visible en TODAS las vistas -->
 <EmergencyBanner />
 
 <main>
-  {#if vista === 'reportar'}
+  {#if vista === 'mapa'}
+    <Mapa />
+  {:else if vista === 'reportar'}
     <Reportar />
   {:else if vista === 'panel'}
     <Panel />
@@ -76,7 +86,10 @@
     position: sticky; top: 0; z-index: 20;
   }
   .marca { display: flex; align-items: center; gap: 0.5rem; color: #fff; text-decoration: none; font-weight: 800; font-size: 1.15rem; letter-spacing: 0.5px; }
+  .cab-der { display: flex; align-items: center; gap: 0.6rem; }
   .offline { background: var(--amarillo); color: #4a3b00; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.5rem; border-radius: 999px; }
+  .repo { color: rgba(255,255,255,0.7); text-decoration: none; font-family: ui-monospace, monospace; font-weight: 700; font-size: 0.95rem; }
+  .repo:hover { color: #fff; }
   main { padding-bottom: 4rem; }
   .tabbar {
     position: fixed; bottom: 0; left: 0; right: 0; display: flex;

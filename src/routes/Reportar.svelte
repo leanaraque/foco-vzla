@@ -79,6 +79,7 @@
     </div>
   {:else}
     <h1>{$t('reportar.titulo')}</h1>
+    <p class="intro-seg">{$t('intro.reportar')}</p>
 
     {#if error}<div class="aviso-error" role="alert">{error}</div>{/if}
 

@@ -50,6 +50,7 @@
 
 <div class="contenedor">
   <h1>{$t('recursos.titulo')}</h1>
+  <p class="intro-seg">{$t('intro.recursos')}</p>
 
   {#if okMsg}<div class="aviso-ok" role="status">{okMsg}</div>{/if}
 
