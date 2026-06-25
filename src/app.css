@@ -1,0 +1,103 @@
+:root {
+  --azul: #0b3d5c;
+  --azul-claro: #1666a0;
+  --amarillo: #ffd23f;
+  --rojo: #e63946;
+  --rojo-osc: #b5232f;
+  --verde: #2a9d54;
+  --gris: #5b6670;
+  --gris-claro: #eef1f4;
+  --bg: #f7f9fb;
+  --texto: #16242e;
+  --borde: #d7dee5;
+  --radio: 12px;
+  --sombra: 0 1px 3px rgba(0, 0, 0, 0.08);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--texto);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+
+#app { min-height: 100vh; }
+
+h1 { font-size: 1.35rem; margin: 0 0 0.6rem; }
+h2 { font-size: 1.1rem; margin: 0 0 0.5rem; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: var(--radio);
+  padding: 0.7rem 1rem;
+  background: var(--gris-claro);
+  color: var(--texto);
+  min-height: 44px; /* objetivo táctil cómodo en móvil */
+}
+button:active { transform: translateY(1px); }
+
+.btn-primario { background: var(--azul); color: #fff; }
+.btn-peligro { background: var(--rojo); color: #fff; }
+.btn-ok { background: var(--verde); color: #fff; }
+.btn-bloque { width: 100%; }
+.btn-grande { padding: 1rem; font-size: 1.05rem; }
+
+input, textarea, select {
+  font: inherit;
+  width: 100%;
+  padding: 0.7rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  background: #fff;
+  color: var(--texto);
+}
+textarea { min-height: 80px; resize: vertical; }
+label { display: block; font-weight: 600; margin: 0.9rem 0 0.35rem; }
+.ayuda { font-weight: 400; color: var(--gris); font-size: 0.85rem; }
+
+.contenedor { max-width: 720px; margin: 0 auto; padding: 1rem 1rem 5rem; }
+
+/* Chips de selección (categoría / urgencia) — táctiles y grandes */
+.chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 0.5rem; }
+.chip { text-align: center; }
+.chip[aria-pressed="true"] { background: var(--azul); color: #fff; border-color: var(--azul); }
+.chip-urg[aria-pressed="true"].u-critica { background: var(--rojo); border-color: var(--rojo); }
+.chip-urg[aria-pressed="true"].u-alta { background: #d97706; border-color: #d97706; }
+.chip-urg[aria-pressed="true"].u-media { background: var(--azul-claro); border-color: var(--azul-claro); }
+
+/* Etiquetas de estado / verificación */
+.tag { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+.tag-verif { background: var(--verde); color: #fff; }
+.tag-noverif { background: var(--amarillo); color: #4a3b00; }
+.tag-sin_atender { background: var(--gris-claro); color: var(--gris); }
+.tag-asignada { background: #dbeafe; color: #1666a0; }
+.tag-resuelta { background: #dcfce7; color: #166534; }
+.tag-cerrada_invalida { background: #f3f4f6; color: #6b7280; }
+.tag-u-critica { background: var(--rojo); color: #fff; }
+.tag-u-alta { background: #fef3c7; color: #92400e; }
+.tag-u-media { background: #e0e7ff; color: #3730a3; }
+
+.tarjeta {
+  background: #fff;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 0.85rem;
+  margin-bottom: 0.7rem;
+  box-shadow: var(--sombra);
+}
+.tarjeta-row { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.4rem; }
+.acciones { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.acciones button { flex: 1; min-width: 120px; }
+
+.aviso-ok { background: #dcfce7; color: #166534; padding: 1rem; border-radius: var(--radio); }
+.aviso-error { background: #fee2e2; color: #991b1b; padding: 0.75rem; border-radius: var(--radio); }
+.aviso-publico { background: #fff7d6; color: #5a4500; border: 1px solid var(--amarillo); padding: 0.55rem 0.7rem; border-radius: var(--radio); font-size: 0.82rem; margin: 0.4rem 0 0; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }

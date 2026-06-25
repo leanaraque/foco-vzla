@@ -1,0 +1,26 @@
+name: rules-tests
+# Ejecuta los tests de las security rules contra el emulador de Firestore en cada
+# PR/push. La privacidad (Spec §6.2-r2) descansa en estas reglas; su verde es
+# evidencia auditable del gate.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Rules tests (emulador)
+        run: npx firebase-tools emulators:exec --only firestore "npm run test:rules"

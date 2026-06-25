@@ -1,0 +1,22 @@
+# Config de gitleaks para FOCO. Extiende las reglas por defecto y permite
+# explícitamente los valores PÚBLICOS-POR-DISEÑO que viven en el cliente:
+#  - apiKey web de Firebase (va en el bundle del navegador; la seguridad la dan
+#    las security rules + App Check, no esta key). Está restringida por referrer.
+#  - site key de reCAPTCHA Enterprise (pública por definición).
+# Cualquier OTRO secreto (service account, .env, claves privadas) debe fallar.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores públicos por diseño (Firebase web config + reCAPTCHA site key)"
+regexes = [
+  '''AIzaSyD_nbgZoZ-ymxSmcy9GEC_PniFTZxUrbQ8''',
+  '''6LfQ2zMtAAAAAEQgln84biLpIQ7HodgCK6pXL3MH''',
+]
+paths = [
+  '''\.env\.example''',
+  '''README\.md''',
+  '''SECURITY\.md''',
+  '''MVP-Spec-Mapa-Ayuda-Venezuela\.md''',
+]

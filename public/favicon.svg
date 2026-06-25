@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="FOCO">
+  <rect width="512" height="512" rx="96" fill="#0b3d5c"/>
+  <circle cx="256" cy="240" r="150" fill="none" stroke="#ffd23f" stroke-width="22" opacity="0.55"/>
+  <circle cx="256" cy="240" r="96" fill="none" stroke="#ffd23f" stroke-width="26"/>
+  <path d="M256 144c-53 0-96 43-96 96 0 72 96 168 96 168s96-96 96-168c0-53-43-96-96-96z" fill="#e63946"/>
+  <circle cx="256" cy="236" r="34" fill="#fff"/>
+</svg>

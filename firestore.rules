@@ -1,0 +1,153 @@
+rules_version = '2';
+
+// ============================================================================
+// FOCO — Security Rules = frontera de privacidad (Spec §6.2 riesgo 2)
+//
+// MODELO DE AMENAZA: estas reglas son PÚBLICAS (repo público). Se asume que el
+// atacante las lee. La seguridad NO descansa en oscuridad sino en: (a) App Check
+// con enforcement, (b) custom claim `coordinador` no spoofeable, (c) validación
+// estricta de esquema/valores, (d) ligar cada escritura a su `creador` (uid).
+//
+// Principio: el contacto del afectado y las coordenadas EXACTAS nunca son
+// legibles sin rol de coordinador verificado. Viven en /privado/datos, separado
+// del documento público de la necesidad.
+// Auditadas y testeadas antes de cada lanzamiento de fase (Spec §12, §16, §17).
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helpers ----------------------------------------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Coordinador verificado: custom claim en el token, no un bool legible.
+    function isCoord() {
+      return isSignedIn() && request.auth.token.coordinador == true;
+    }
+
+    function isOneOf(value, allowed) {
+      return value is string && (value in allowed);
+    }
+
+    function estadoValido(s) {
+      return isOneOf(s, ['sin_atender', 'asignada', 'resuelta', 'cerrada_invalida']);
+    }
+    function verifValido(v) {
+      return isOneOf(v, ['no_verificada', 'verificada']);
+    }
+
+    // El `creador` de un documento público de necesidad/recurso.
+    function creadorDe(coleccion, id) {
+      return get(/databases/$(database)/documents/$(coleccion)/$(id)).data.creador;
+    }
+
+    // Una necesidad recién creada: nace no_verificada/sin_atender, sin asignar, y
+    // SIEMPRE estampada con el uid del autor (D2: uid estable para rules/dedup).
+    function validNuevaNecesidad(d) {
+      return isOneOf(d.categoria, ['rescate','medico','agua','alimento','refugio','otro'])
+        && isOneOf(d.urgencia, ['critica','alta','media'])
+        && isOneOf(d.fuente, ['web','sms','whatsapp','coordinador'])
+        && d.estado == 'sin_atender'
+        && d.verificacion == 'no_verificada'
+        && d.reclamada_por == null
+        && d.creador == request.auth.uid
+        && d.descripcion is string && d.descripcion.size() <= 500
+        && d.sector is string && d.sector.size() > 0 && d.sector.size() <= 140
+        && d.geo.lat is number && d.geo.lng is number
+        && d.geo.geohash is string;
+    }
+
+    function validNuevoRecurso(d) {
+      return isOneOf(d.categoria, ['agua','transporte','refugio','medico','alimento','otro'])
+        && d.creador == request.auth.uid
+        && d.descripcion is string && d.descripcion.size() <= 500
+        && d.sector is string && d.sector.size() > 0 && d.sector.size() <= 140
+        && d.disponible == true
+        && d.geo.lat is number && d.geo.lng is number;
+    }
+
+    // F1: el subdoc privado debe estar estampado por su autor, con esquema y
+    // tamaño acotados, y SIN campos desconocidos. `geo_exacta` es opcional.
+    function validPrivado(d) {
+      return d.creador == request.auth.uid
+        && d.keys().hasOnly(['creador', 'contacto', 'geo_exacta'])
+        && d.contacto is string && d.contacto.size() <= 140
+        && (!('geo_exacta' in d) || (d.geo_exacta.lat is number && d.geo_exacta.lng is number));
+    }
+
+    // F3: un coordinador solo puede mutar campos de gestión Y solo a valores
+    // válidos (enums), nunca reescribir el contenido reportado.
+    function updateGestionValido(d, prev) {
+      return d.diff(prev).affectedKeys().hasOnly(['estado','verificacion','reclamada_por','actualizada_en'])
+        && estadoValido(d.estado)
+        && verifValido(d.verificacion);
+    }
+
+    // === NECESIDADES =======================================================
+    match /necesidades/{id} {
+      // Lectura: las verificadas son visibles (vista pública Fase 2); las
+      // no_verificadas solo para coordinadores.
+      allow read: if resource.data.verificacion == 'verificada' || isCoord();
+
+      allow create: if isSignedIn() && validNuevaNecesidad(request.resource.data);
+
+      // Gestión (reclamar, resolver, reabrir, verificar, invalidar): solo coord.
+      allow update: if isCoord() && updateGestionValido(request.resource.data, resource.data);
+
+      allow delete: if false; // se usa estado 'cerrada_invalida'
+
+      // --- Subdocumento PRIVADO: contacto + coordenadas exactas -----------
+      match /privado/{doc} {
+        allow read: if isCoord();
+        // F1: crear solo si (a) esquema/tamaño válido y estampado por el autor, y
+        // (b) el autor es el MISMO que creó la necesidad padre. Impide que un UID
+        // anónimo inyecte/pise el contacto de un id ajeno. La sobrescritura de un
+        // privado existente es 'update' → solo coord.
+        allow create: if isSignedIn()
+                      && validPrivado(request.resource.data)
+                      && creadorDe('necesidades', id) == request.auth.uid;
+        allow update, delete: if isCoord();
+      }
+    }
+
+    // === RECURSOS ==========================================================
+    match /recursos/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && validNuevoRecurso(request.resource.data);
+      // disponible (bool) y actualizada_en gestionables por coord.
+      allow update: if isCoord()
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['disponible', 'actualizada_en'])
+                    && request.resource.data.disponible is bool;
+      allow delete: if false;
+
+      match /privado/{doc} {
+        allow read: if isCoord();
+        allow create: if isSignedIn()
+                      && validPrivado(request.resource.data)
+                      && creadorDe('recursos', id) == request.auth.uid;
+        allow update, delete: if isCoord();
+      }
+    }
+
+    // === COORDINADORES (perfil) ===========================================
+    match /coordinadores/{uid} {
+      allow read: if isCoord();
+      allow create, update: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if false;
+    }
+
+    // === DEMO (datos ficticios para testeo 3G de Lean) =====================
+    // Solo lectura pública (con App Check); escritura solo Admin SDK (bypass).
+    // NUNCA contiene datos reales. Aislado de las colecciones de producción.
+    match /_demo_necesidades/{id} { allow read: if true; allow write: if false; }
+    match /_demo_recursos/{id}    { allow read: if true; allow write: if false; }
+
+    // === Cierre por defecto: todo lo no declarado, denegado ================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

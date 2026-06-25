@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.firebase/
+*.log
+pglite-debug.log
+.env
+.env.*
+serviceAccountKey.json
+.DS_Store
+.vite/
+coverage/
