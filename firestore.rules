@@ -34,8 +34,20 @@ service cloud.firestore {
     function estadoValido(s) {
       return isOneOf(s, ['sin_atender', 'asignada', 'resuelta', 'cerrada_invalida']);
     }
+    // Estados de verificación tras el pivote (§22.5): la multitud confirma; el
+    // aislado pasa a pendiente_revision (cola del operador, MÁS visible). Se
+    // mantiene 'verificada' por compatibilidad con datos previos / validación
+    // manual de coordinador (equivale a confirmada en la UI).
     function verifValido(v) {
-      return isOneOf(v, ['no_verificada', 'verificada']);
+      return isOneOf(v, ['no_verificada', 'confirmada', 'pendiente_revision', 'verificada']);
+    }
+
+    // Una confirmación ciudadana: documento mínimo estampado por su autor. El id
+    // del documento ES el uid → un uid solo puede crear el suyo, una vez
+    // (recrearlo es 'update', denegado). Anti-duplicado por rules (§22.5).
+    function validConfirmacion(d) {
+      return d.keys().hasOnly(['creador', 'creada_en'])
+        && d.creador == request.auth.uid;
     }
 
     // El `creador` de un documento público de necesidad/recurso.
@@ -87,13 +99,20 @@ service cloud.firestore {
 
     // === NECESIDADES =======================================================
     match /necesidades/{id} {
-      // Lectura: las verificadas son visibles (vista pública Fase 2); las
-      // no_verificadas solo para coordinadores.
-      allow read: if resource.data.verificacion == 'verificada' || isCoord();
+      // PIVOTE §22: el documento PÚBLICO de la necesidad es legible por cualquiera
+      // (con App Check). Es el centro del modelo "mapa público + validación por
+      // multitud": para confirmar un caso hay que poder verlo, incl. no_verificada
+      // y pendiente_revision (el aislado NUNCA se oculta, §22.5). El doc público no
+      // contiene datos sensibles: contacto y coords exactas viven en /privado/datos
+      // (solo coord) y la ubicación pública es de nivel sector (~1km).
+      allow read: if true;
 
       allow create: if isSignedIn() && validNuevaNecesidad(request.resource.data);
 
       // Gestión (reclamar, resolver, reabrir, verificar, invalidar): solo coord.
+      // El CONTADOR de confirmaciones y la transición de estado los hace una Cloud
+      // Function con Admin SDK (bypassa rules) → contador no manipulable por el
+      // cliente (§22.5/§22.8). El cliente solo crea su confirmación en la subcol.
       allow update: if isCoord() && updateGestionValido(request.resource.data, resource.data);
 
       allow delete: if false; // se usa estado 'cerrada_invalida'
@@ -109,6 +128,20 @@ service cloud.firestore {
                       && validPrivado(request.resource.data)
                       && creadorDe('necesidades', id) == request.auth.uid;
         allow update, delete: if isCoord();
+      }
+
+      // --- Confirmaciones ciudadanas (validación por multitud §22.5) ------
+      match /confirmaciones/{uid} {
+        // Conteo: nadie lee la subcolección entera desde el cliente (costo); el
+        // contador denormalizado vive en el padre. Permitir leer la PROPIA para
+        // que la UI sepa si este usuario ya confirmó (no marcar dos veces).
+        allow read: if isSignedIn() && request.auth.uid == uid;
+        // Crear SOLO la confirmación propia (id == uid), una vez (recrear = update,
+        // denegado). Esto es el anti-duplicado por rules.
+        allow create: if isSignedIn()
+                      && request.auth.uid == uid
+                      && validConfirmacion(request.resource.data);
+        allow update, delete: if false; // inmutable
       }
     }
 

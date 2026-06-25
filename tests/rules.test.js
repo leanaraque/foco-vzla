@@ -59,18 +59,54 @@ describe('necesidades — create', () => {
   });
 });
 
-describe('necesidades — read / verificación', () => {
-  test('no-verificada NO es legible por usuario normal', async () => {
+describe('necesidades — read público (PIVOTE §22)', () => {
+  test('§22: no-verificada ES legible públicamente (validación por multitud)', async () => {
     await seed((db) => setDoc(doc(db, 'necesidades/n5'), necesidad()));
-    await assertFails(getDoc(doc(normal(), 'necesidades/n5')));
+    await assertSucceeds(getDoc(doc(normal(), 'necesidades/n5')));
   });
-  test('verificada SÍ es legible (preparado vista pública Fase 2)', async () => {
-    await seed((db) => setDoc(doc(db, 'necesidades/n6'), necesidad('anon1', { verificacion: 'verificada' })));
+  test('confirmada es legible públicamente', async () => {
+    await seed((db) => setDoc(doc(db, 'necesidades/n6'), necesidad('anon1', { verificacion: 'confirmada' })));
     await assertSucceeds(getDoc(doc(normal(), 'necesidades/n6')));
   });
-  test('coordinador lee las no-verificadas', async () => {
+  test('SALVAGUARDA §22.5: el aislado (pendiente_revision) NUNCA se oculta', async () => {
+    await seed((db) => setDoc(doc(db, 'necesidades/nais'), necesidad('anon1', { verificacion: 'pendiente_revision' })));
+    await assertSucceeds(getDoc(doc(normal(), 'necesidades/nais')));
+  });
+  test('coordinador también lee (cualquier estado)', async () => {
     await seed((db) => setDoc(doc(db, 'necesidades/n7'), necesidad()));
     await assertSucceeds(getDoc(doc(coord(), 'necesidades/n7')));
+  });
+});
+
+describe('confirmaciones ciudadanas (validación por multitud §22.5)', () => {
+  beforeEach(async () => {
+    await seed((db) => setDoc(doc(db, 'necesidades/nc'), necesidad('autor')));
+  });
+  const conf = (uid) => ({ creador: uid, creada_en: new Date() });
+
+  test('un usuario puede confirmar una vez (crea su confirmación)', async () => {
+    await assertSucceeds(setDoc(doc(anon('userA'), 'necesidades/nc/confirmaciones/userA'), conf('userA')));
+  });
+  test('NO puede confirmar dos veces (recrear su confirmación = update, denegado)', async () => {
+    await seed((db) => setDoc(doc(db, 'necesidades/nc/confirmaciones/userA'), conf('userA')));
+    await assertFails(updateDoc(doc(anon('userA'), 'necesidades/nc/confirmaciones/userA'), { creada_en: new Date() }));
+  });
+  test('NO puede crear la confirmación de OTRO uid (id != su uid)', async () => {
+    await assertFails(setDoc(doc(anon('userA'), 'necesidades/nc/confirmaciones/userB'), conf('userB')));
+  });
+  test('NO puede suplantar creador (creador != uid escritor)', async () => {
+    await assertFails(setDoc(doc(anon('userA'), 'necesidades/nc/confirmaciones/userA'), conf('userB')));
+  });
+  test('rechaza campos desconocidos en la confirmación', async () => {
+    await assertFails(setDoc(doc(anon('userA'), 'necesidades/nc/confirmaciones/userA'), { creador: 'userA', creada_en: new Date(), voto: 99 }));
+  });
+  test('el contador/estado del padre NO es editable por el cliente (solo función/coord)', async () => {
+    await assertFails(updateDoc(doc(anon('userA'), 'necesidades/nc'), { confirmaciones: 5, verificacion: 'confirmada' }));
+  });
+  test('un usuario solo lee su PROPIA confirmación, no la de otros', async () => {
+    await seed((db) => setDoc(doc(db, 'necesidades/nc/confirmaciones/userB'), conf('userB')));
+    await assertSucceeds(getDoc(doc(anon('userB'), 'necesidades/nc/confirmaciones/userB')));
+    await assertFails(getDoc(doc(anon('userA'), 'necesidades/nc/confirmaciones/userB')));
   });
 });
 

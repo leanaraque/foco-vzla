@@ -1,7 +1,7 @@
 // Capa de acceso a datos. Toda lectura del panel está acotada con limit() y
 // paginación para controlar el costo de lecturas de Firestore (Spec §6.2 riesgo 1).
 import {
-  collection, doc, setDoc, updateDoc, getDoc,
+  collection, doc, setDoc, updateDoc, getDoc, getDocs, getDocsFromCache,
   query, where, orderBy, limit, startAfter, onSnapshot,
   serverTimestamp
 } from 'firebase/firestore';
@@ -128,6 +128,54 @@ export function suscribirRecursos(cb) {
   return onSnapshot(q, (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   });
+}
+
+// --- Vista pública del mapa (PIVOTE §22) — CONTROL DE COSTO (§6.2-r1) ----
+// Patrón elegido: lectura PUNTUAL paginada con CACHÉ-PRIMERO, NO un onSnapshot
+// abierto. Cada carga intenta servir desde IndexedDB (getDocsFromCache, 0 lecturas
+// facturables) y solo va al servidor si la caché está vacía o se fuerza un refresco
+// manual (con cooldown en la UI). Así un pico viral no dispara lecturas: N usuarios
+// = a lo sumo 1 página por carga/refresco, y las relecturas salen de caché.
+// `pendiente_revision` (aislado) se prioriza en la UI; aquí traemos la página
+// reciente y la UI lo ordena al frente (salvaguarda §22.5: más visible, no menos).
+export async function leerNecesidadesPublicas({ forzarServidor = false, demo = false } = {}) {
+  const col = demo ? '_demo_necesidades' : 'necesidades';
+  const q = query(collection(db, col), orderBy('creada_en', 'desc'), limit(PAGINA));
+
+  if (!forzarServidor) {
+    try {
+      const cache = await getDocsFromCache(q);
+      if (!cache.empty) {
+        return { items: cache.docs.map((d) => ({ id: d.id, ...d.data() })), origen: 'cache' };
+      }
+    } catch (_) { /* sin caché → al servidor */ }
+  }
+  const snap = await getDocs(q); // 1 página facturable; solo en frío o refresco manual
+  return { items: snap.docs.map((d) => ({ id: d.id, ...d.data() })), origen: 'servidor' };
+}
+
+// Confirmación ciudadana (§22.5): el usuario crea SU confirmación (id == su uid).
+// Una sola vez por uid (lo enforcan las rules). El contador y la transición de
+// estado los hace la Cloud Function; aquí solo se registra el voto.
+export async function confirmarNecesidad(id) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('sin-sesion');
+  await setDoc(doc(db, 'necesidades', id, 'confirmaciones', uid), {
+    creador: uid,
+    creada_en: serverTimestamp()
+  });
+}
+
+// ¿Este usuario ya confirmó esta necesidad? (lee solo su propia confirmación)
+export async function yaConfirme(id) {
+  const uid = auth.currentUser?.uid;
+  if (!uid) return false;
+  try {
+    const snap = await getDoc(doc(db, 'necesidades', id, 'confirmaciones', uid));
+    return snap.exists();
+  } catch (_) {
+    return false;
+  }
 }
 
 // --- Acciones del coordinador (Spec casos 2–4) --------------------------
