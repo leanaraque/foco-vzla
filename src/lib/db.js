@@ -38,12 +38,16 @@ export function crearNecesidad({ categoria, urgencia, sector, descripcion, lat, 
   const ref = doc(collection(db, 'necesidades'));
 
   // (1) Encola la necesidad (padre) PRIMERO. Escritura separada, no batch.
+  // `sectorGeo` = prefijo de geohash (5 chars) para el cálculo de densidad del
+  // umbral (F6). `confirmaciones` NO se estampa: nace ausente (==0 efectivo) y solo
+  // la Cloud Function lo escribe (F10).
   const pNecesidad = setDoc(ref, {
     categoria,
     urgencia,
     sector,
     descripcion: descripcion || '',
     geo,
+    sectorGeo: geo.geohash.slice(0, 5),
     estado: 'sin_atender',
     verificacion: 'no_verificada',
     fuente: 'web',

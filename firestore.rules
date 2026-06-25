@@ -57,26 +57,42 @@ service cloud.firestore {
 
     // Una necesidad recién creada: nace no_verificada/sin_atender, sin asignar, y
     // SIEMPRE estampada con el uid del autor (D2: uid estable para rules/dedup).
+    // F10: BLOQUEA claves desconocidas y FUERZA el contador a 0 (o ausente). Sin
+    // esto un reportante podía nacer con confirmaciones:9999 → autoconfirmación de
+    // casos falsos. `sectorGeo` (prefijo de geohash, F6) debe coincidir con el
+    // geohash para que la densidad no sea manipulable.
     function validNuevaNecesidad(d) {
-      return isOneOf(d.categoria, ['rescate','medico','agua','alimento','refugio','otro'])
+      return d.keys().hasOnly([
+          'categoria','urgencia','fuente','estado','verificacion','reclamada_por',
+          'creador','descripcion','sector','geo','sectorGeo','confirmaciones',
+          'creada_en','actualizada_en'
+        ])
+        && isOneOf(d.categoria, ['rescate','medico','agua','alimento','refugio','otro'])
         && isOneOf(d.urgencia, ['critica','alta','media'])
         && isOneOf(d.fuente, ['web','sms','whatsapp','coordinador'])
         && d.estado == 'sin_atender'
         && d.verificacion == 'no_verificada'
         && d.reclamada_por == null
         && d.creador == request.auth.uid
+        && (!('confirmaciones' in d) || d.confirmaciones == 0)
         && d.descripcion is string && d.descripcion.size() <= 500
         && d.sector is string && d.sector.size() > 0 && d.sector.size() <= 140
+        && d.geo.keys().hasOnly(['lat','lng','geohash'])
         && d.geo.lat is number && d.geo.lng is number
-        && d.geo.geohash is string;
+        && d.geo.geohash is string
+        && d.sectorGeo is string && d.sectorGeo == d.geo.geohash[0:5];
     }
 
     function validNuevoRecurso(d) {
-      return isOneOf(d.categoria, ['agua','transporte','refugio','medico','alimento','otro'])
+      return d.keys().hasOnly([
+          'categoria','sector','descripcion','geo','disponible','creador','creada_en'
+        ])
+        && isOneOf(d.categoria, ['agua','transporte','refugio','medico','alimento','otro'])
         && d.creador == request.auth.uid
         && d.descripcion is string && d.descripcion.size() <= 500
         && d.sector is string && d.sector.size() > 0 && d.sector.size() <= 140
         && d.disponible == true
+        && d.geo.keys().hasOnly(['lat','lng','geohash'])
         && d.geo.lat is number && d.geo.lng is number;
     }
 

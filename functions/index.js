@@ -79,43 +79,43 @@ export const solicitarCoordinador = onCall(
 );
 
 // === Validación por multitud: contador + transición de estado =============
-// Trigger al crear una confirmación. Incrementa el contador (no manipulable por
-// el cliente) y, al alcanzar N (sensible a densidad), marca 'confirmada' (§22.5).
+// Trigger al crear una confirmación. (§22.5)
 export const onConfirmacion = onDocumentCreated(
   { document: 'necesidades/{id}/confirmaciones/{uid}', region: 'us-central1' },
   async (event) => {
     const ref = db.collection('necesidades').doc(event.params.id);
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists) return;
-      const n = snap.data();
-      const conf = (n.confirmaciones || 0) + 1;
+    const snap = await ref.get();
+    if (!snap.exists) return;
+    const n = snap.data();
+    if (n.verificacion === 'confirmada' || n.verificacion === 'verificada') return;
 
-      // N sensible a densidad (NO fijo): en sectores con más reportes alrededor se
-      // exige algo más; en zonas vacías basta con poco. Acotado a [2,4].
-      const umbral = await calcularUmbral(n);
+    // F10 (defensa en profundidad): NO confiamos en el contador denormalizado (un
+    // create malicioso podría pre-sembrarlo; además las rules ya lo fuerzan a 0).
+    // El conteo AUTORITATIVO se deriva de la subcolección (1 confirmación por uid,
+    // deduplicada por rules). COUNT es una agregación barata (no N lecturas).
+    const conf = (await ref.collection('confirmaciones').count().get()).data().count;
 
-      const patch = { confirmaciones: conf, actualizada_en: FieldValue.serverTimestamp() };
-      if (conf >= umbral && n.verificacion !== 'confirmada' && n.verificacion !== 'verificada') {
-        patch.verificacion = 'confirmada';
-      }
-      tx.update(ref, patch);
-    });
+    // N sensible a densidad (NO fijo), calculado FUERA de transacción y con
+    // agregación COUNT por sector (F7: ~1 lectura, no ~20). Acotado a [2,4].
+    const umbral = await calcularUmbral(n);
+
+    const patch = { confirmaciones: conf, actualizada_en: FieldValue.serverTimestamp() };
+    if (conf >= umbral) patch.verificacion = 'confirmada';
+    await ref.update(patch);
   }
 );
 
-// Densidad por prefijo de geohash (sector aproximado). Más vecinos → umbral mayor.
+// Densidad por SECTOR (prefijo de geohash de 5 chars guardado en `sectorGeo`).
+// F6: con geohashes reales (~10 chars) un rango sobre `geo.geohash` NO captura el
+// sector (daba densidad ~0, umbral fijo en 2). Usamos IGUALDAD sobre `sectorGeo`
+// (el prefijo estampado en el cliente y validado por las rules). COUNT, no fetch
+// de documentos (F7). Más vecinos en el sector → umbral mayor.
 async function calcularUmbral(n) {
-  const gh = n.geo?.geohash;
-  if (!gh || gh.length < 5) return 2;
-  const pref = gh.slice(0, 5);
-  // Rango [pref, pref + ''] = mismo sector ~5km.
-  const q = db.collection('necesidades')
-    .where('geo.geohash', '>=', pref)
-    .where('geo.geohash', '<=', pref + '')
-    .limit(20);
-  const snap = await q.get();
-  const densidad = snap.size;
+  const pref = n.sectorGeo || (n.geo && n.geo.geohash ? n.geo.geohash.slice(0, 5) : null);
+  if (!pref) return 2;
+  const densidad = (
+    await db.collection('necesidades').where('sectorGeo', '==', pref).count().get()
+  ).data().count;
   if (densidad <= 3) return 2;
   if (densidad <= 10) return 3;
   return 4;
@@ -128,8 +128,7 @@ async function calcularUmbral(n) {
 export const marcarAislados = onSchedule(
   { schedule: 'every 60 minutes', region: 'us-central1' },
   async () => {
-    const limite = Date.now() - 6 * 60 * 60 * 1000; // 6 horas
-    const corte = new Date(limite);
+    const corte = new Date(Date.now() - 6 * 60 * 60 * 1000); // 6 horas
     const q = db.collection('necesidades')
       .where('verificacion', '==', 'no_verificada')
       .where('creada_en', '<=', corte)

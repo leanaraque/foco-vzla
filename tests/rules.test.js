@@ -13,12 +13,14 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 let testEnv;
 
 // Fábrica de necesidad válida estampada con un uid de autor.
+// geohash realista (~9 chars) y sectorGeo = prefijo de 5 (debe coincidir, F6/F10).
 const necesidad = (creador = 'anon1', over = {}) => ({
   categoria: 'agua', urgencia: 'alta', sector: 'Morón centro',
   descripcion: 'Familia sin agua', fuente: 'web',
   estado: 'sin_atender', verificacion: 'no_verificada', reclamada_por: null,
   creador,
-  geo: { lat: 10.49, lng: -68.2, geohash: 'd6n' },
+  geo: { lat: 10.49, lng: -68.2, geohash: 'd6npq5e8x' },
+  sectorGeo: 'd6npq',
   ...over
 });
 
@@ -56,6 +58,25 @@ describe('necesidades — create', () => {
   });
   test('rechaza creador suplantado (creador != uid del que escribe)', async () => {
     await assertFails(setDoc(doc(anon('anon1'), 'necesidades/n4b'), necesidad('otro_uid')));
+  });
+  test('F10: rechaza nacer con confirmaciones>0 (anti-autoconfirmación)', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/n4c'), necesidad('anon1', { confirmaciones: 9999 })));
+  });
+  test('F10: acepta confirmaciones==0 explícito', async () => {
+    await assertSucceeds(setDoc(doc(anon(), 'necesidades/n4c0'), necesidad('anon1', { confirmaciones: 0 })));
+  });
+  test('F10: rechaza clave desconocida (hasOnly)', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/n4d'), necesidad('anon1', { backdoor: true })));
+  });
+  test('F10: rechaza clave desconocida dentro de geo', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/n4e'), necesidad('anon1', { geo: { lat: 10.49, lng: -68.2, geohash: 'd6npq5e8x', hack: 1 } })));
+  });
+  test('F6/F10: rechaza sectorGeo que NO coincide con el prefijo del geohash', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/n4f'), necesidad('anon1', { sectorGeo: 'zzzzz' })));
+  });
+  test('F6/F10: rechaza necesidad SIN sectorGeo', async () => {
+    const n = necesidad('anon1'); delete n.sectorGeo;
+    await assertFails(setDoc(doc(anon(), 'necesidades/n4g'), n));
   });
 });
 
