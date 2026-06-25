@@ -517,3 +517,159 @@ RULES (tests/rules.test.js, emulador): 26 passed (26)   [antes 24]
 | ⛔ | **Reclutar 5–10 coordinadores** | **Lean** (bloquea lanzamiento) |
 
 **Fase 1b NO arranca** hasta cerrar esos tres pendientes de Lean. **El gate NO se da por cerrado por el agente.** Staging sin usuarios reales ni datos de víctimas.
+
+---
+
+## 21. Relevo de equipo — Juez 2 + Claude Code 2 (25 jun 2026)
+
+> Doble relevo del equipo original. El "2" es por handover, no por jerarquía:
+> los cuatro agentes trabajan en igualdad, pero por turnos. Esta sección la
+> redacta Claude Code 2 para que Juez 1 y Claude Code 1, al retomar, encuentren
+> el contexto completo del relevo sin tener que reconstruirlo.
+
+### 21.1 Quién es quién
+
+| Rol | Agente | Estado |
+|---|---|---|
+| Juez 1 (estratega/juez original) | — | Sin tokens; no continúa por ahora. |
+| **Juez 2** | — | Activo. Evalúa leyendo los archivos reales, no los reportes. |
+| Claude Code 1 (builder original) | — | Cerró B1, B2, F1/F2/F3, §17–§20. |
+| **Claude Code 2** (builder en relevo) | — | Activo. Continúa el trabajo desde §20. |
+
+### 21.2 Estado heredado — verificado por Juez 2
+
+Juez 2 validó por inspección directa, no por confianza en los reportes:
+
+- **§20 (bug offline `geo_exacta`):** corregido en `src/lib/payload.js` (módulo
+  puro). `geo_exacta` solo se escribe con GPS real; el centro de zona alimenta
+  solo el geo público. **Aprobado.**
+- **F1** (autoría/esquema del subdoc privado): reglas correctas. **Aprobado.**
+- **F2** (descripción libre, pública al verificar): aviso al usuario + revisión
+  humana en verificación. **Aprobado.**
+- **F3** (`updateGestionValido` valida enums): correcto. **Aprobado.**
+- `tests/payload.test.js` (9) y `tests/rules.test.js` (26): existen y cubren los
+  casos. **Aprobado por inspección.**
+- Andamiaje del repo (LICENSE, SECURITY/PRIVACY/README/CONTRIBUTING/
+  CODE_OF_CONDUCT, ISSUE_TEMPLATE, PR template, `.gitleaks.toml`): **presente.**
+- Git: 8 commits en `origin/main`, sin secretos.
+
+### 21.3 Único pendiente del lado builder — CERRADO
+
+**Hueco de CI:** `.github/workflows/rules-tests.yml` corría **solo** los rules
+tests. El fix de §20 (módulo puro `payload.js`) quedaba sin protección de CI:
+una regresión en `construirPrivado` / `geoPublicoSeguro` podía pasar a `main`
+sin que los 9 tests unitarios lo capturaran.
+
+**Corrección (Claude Code 2):** se añadió un paso `Unit tests (payload §20)`
+**antes** del paso del emulador (y después de `npm ci`):
+
+```yaml
+      - run: npm ci
+      - name: Unit tests (payload §20)
+        run: npm run test:unit
+      - name: Rules tests (emulador)
+        run: npx firebase-tools emulators:exec --only firestore "npm run test:rules"
+```
+
+Razonamiento: los unitarios son baratos (sin emulador, sin Java) y rápidos;
+fallan primero si la capa de datos rompe. Los rules tests siguen siendo el gate
+duro de privacidad.
+
+### 21.4 Evidencia fresca — regenerada antes del push
+
+Corrida en local por Claude Code 2 (Windows + Node 24, npm 11, Java 21 vía JBR
+de Android Studio). Ambas suites se ejecutaron contra el código actual del
+repo, no contra una versión cacheada.
+
+**Unitarios — `npm run test:unit` (9/9):**
+
+```
+ ✓ tests/payload.test.js (9 tests) 20ms
+   construirPrivado — geo_exacta solo con GPS real (§20)
+     ✓ (a) CON contacto y SIN GPS → privado válido sin geo_exacta
+     ✓ (b) SIN contacto y SIN GPS → no se crea privado (null)
+     ✓ (c) CON GPS → geo_exacta presente y válida
+     ✓ CON GPS y SIN contacto → privado con geo_exacta y contacto vacío
+     ✓ coords no numéricas (NaN/strings) se tratan como SIN GPS
+   geoPublicoSeguro — geo público siempre válido
+     ✓ SIN GPS → usa el centro de zona, con números finitos + geohash
+     ✓ CON GPS → coords reales aproximadas (~1km) + geohash
+     ✓ coords inválidas → cae al centro de zona, nunca NaN
+   tieneCoords
+     ✓ solo números finitos cuentan como coords
+
+ Test Files  1 passed (1)
+      Tests  9 passed (9)
+```
+
+**Rules tests — `firebase emulators:exec --only firestore "npm run test:rules"` (26/26):**
+
+```
+ ✓ tests/rules.test.js (26 tests) 10.14s
+   necesidades — create:
+     ✓ reportante anónimo puede crear necesidad válida
+     ✓ rechaza enum de categoría inválido (§14-2)
+     ✓ rechaza nacer verificada (anti-rumor §9-3)
+     ✓ rechaza descripción demasiado larga
+     ✓ rechaza creador suplantado (creador != uid del que escribe)
+   necesidades — read / verificación:
+     ✓ no-verificada NO es legible por usuario normal
+     ✓ verificada SÍ es legible (preparado vista pública Fase 2)
+     ✓ coordinador lee las no-verificadas
+   necesidades — update (gestión solo coordinador) [F3]:
+     ✓ coordinador puede verificar
+     ✓ reportante anónimo NO puede verificar
+     ✓ coordinador NO puede reescribir contenido reportado (categoría)
+     ✓ F3: rechaza valor de estado fuera del enum
+     ✓ F3: rechaza valor de verificacion fuera del enum
+     ✓ F3: acepta transición de estado válida
+   privado — contacto/coords exactas (frontera §6.2-r2):
+     ✓ coordinador SÍ lee el contacto privado
+     ✓ usuario normal NO lee el contacto privado
+     ✓ reportante anónimo NO lee el contacto privado
+   privado — escritura abusiva [F1]:
+     ✓ el autor (anon1) SÍ puede crear el privado de su propia necesidad
+     ✓ §20: privado SIN geo_exacta (reporte con contacto sin GPS) es válido
+     ✓ §20: privado con geo_exacta de tipo inválido sigue rechazado
+     ✓ otro anónimo NO puede inyectar el privado de una necesidad ajena
+     ✓ no se puede suplantar al autor (creador del privado != uid escritor)
+     ✓ NO se puede sobrescribir un contacto ya existente (update solo coord)
+     ✓ rechaza contacto demasiado largo
+     ✓ rechaza campos desconocidos en el privado
+     ✓ rechaza geo_exacta con tipo inválido
+
+ Test Files  1 passed (1)
+      Tests  26 passed (26)
+```
+
+Los `PERMISSION_DENIED` que aparecen en stderr durante esta corrida son los
+tests negativos (`assertFails`) confirmando la denegación esperada — mismo
+patrón ya documentado en §16.
+
+### 21.5 Estado del gate de Fase 1 — tabla vigente
+
+Sucesora de la tabla de §20 (que queda como histórico). Ahora con CI completo
+en cada PR y push:
+
+| Estado | Ítem | Responsable |
+|---|---|---|
+| ✅ | B1, B2, F1, F2, F3 | Aceptado por el jurado |
+| ✅ | Corrección offline (§19), D8, TESTING.md, bug `geo_exacta` (§20) | Aceptado por el jurado |
+| ✅ | **CI completo: unit (9) + rules (26) en cada PR/push** (§21.3); evidencia fresca regenerada (§21.4) | Claude Code 2 — pendiente de visto bueno de Juez 2 |
+| ⏳ | **Testeo móvil 3G** (TESTING.md, `/panel?demo=1`) | **Lean** |
+| ⛔ | **Handoff §9-4** — operador semana 2 | **Lean** (bloquea lanzamiento) |
+| ⛔ | **Reclutar 5–10 coordinadores** (anti cold-start §11) | **Lean** (bloquea lanzamiento) |
+
+### 21.6 Guardarraíles respetados
+
+Claude Code 2 confirma, para el registro:
+- **No se inició la Fase 1b** (SMS/WhatsApp + dedup). El gate de Fase 1 sigue
+  abierto en los tres pendientes de Lean.
+- **No se habilitó uso real** ni se cargaron datos de víctimas; staging sigue
+  siendo el único entorno y sigue con `_demo_*` como única fuente de datos.
+- **El gate NO se da por cerrado por el agente.** El visto bueno del cierre del
+  hueco de CI (§21.3–§21.4) lo otorga Juez 2 al leer este documento y revisar
+  el commit; el cierre del gate completo de Fase 1 depende, además, de los tres
+  pendientes de Lean.
+- **§15–§20 no fueron editadas** — son históricas del equipo anterior.
+
