@@ -460,3 +460,60 @@ Checklist reproducible del DoD §8 en **[TESTING.md](TESTING.md)**: carga 3G + T
 | ⛔ | **Reclutar 5–10 coordinadores** (anti cold-start §11) | **Lean** (bloquea lanzamiento) |
 
 **Fase 1b NO arranca** hasta cerrar el gate de Fase 1 con esos tres pendientes de Lean. **El gate NO se da por cerrado por el agente.** Staging sin usuarios reales ni datos de víctimas.
+
+---
+
+## 20. Bug offline `geo_exacta` corregido + andamiaje de repo (25 jun 2026)
+
+> Jurado: corrección del orden offline (§19), decisión D8 y TESTING.md verificados en código y aprobados. Aparece un bug nuevo, corregido antes de seguir. Fase 1b sigue sin arrancar.
+
+### Bug — `geo_exacta` se guardaba siempre (incluso sin GPS)
+
+**Síntoma:** el subdocumento privado incluía siempre `geo_exacta: { lat, lng }`. Como ambas UIs aplicaban un *fallback* de coordenadas (centro de Morón) **antes** de la capa de datos, se guardaba una **coordenada exacta falsa** para todo reporte, y el privado se creaba aun sin contacto ni GPS real. Con coords inválidas/ausentes (`null`/`undefined`) la regla `validPrivado` habría rechazado el privado y el **contacto se perdería en silencio** al sincronizar offline.
+
+**Corrección:**
+- Nuevo módulo **puro** `src/lib/payload.js` (sin Firebase, unit-testeable):
+  - `geoPublicoSeguro(lat,lng)` — el geo **público** siempre válido: coords reales aproximadas si hay GPS, o el **centro de zona** si no (el `sector` textual aporta el detalle). Nunca `NaN`/`undefined`.
+  - `construirPrivado(uid,contacto,lat,lng)` — incluye `geo_exacta` **solo si hay GPS real**; devuelve `null` si no hay nada sensible que guardar (sin contacto y sin GPS) → no se crea privado.
+- `src/lib/db.js` usa estos helpers; las UIs (`Reportar`, `Recursos`) pasan las **coords reales** (`null` sin GPS), no el fallback. **El flujo sin GPS funciona completo** (doc público con geo de zona + privado con contacto sin `geo_exacta`).
+
+**Caso "sin GPS" verificado de punta a punta:** UI pasa `lat/lng = null` → `geoPublicoSeguro` da un geo público válido (centro de zona + geohash) que cumple las rules del doc público → `construirPrivado` arma el privado con contacto y **sin** `geo_exacta` → `validPrivado` lo acepta. Sin `NaN`, sin pérdida de contacto.
+
+### Tests — ejecutados ✅ (9 unit + 26 rules)
+
+```
+UNIT (tests/payload.test.js, sin emulador):  9 passed (9)
+  ✓ (a) CON contacto y SIN GPS → privado válido sin geo_exacta
+  ✓ (b) SIN contacto y SIN GPS → no se crea privado (null)
+  ✓ (c) CON GPS → geo_exacta presente y válida
+  ✓ CON GPS y SIN contacto → privado con geo_exacta y contacto vacío
+  ✓ coords no numéricas (NaN/strings) se tratan como SIN GPS
+  ✓ geoPublicoSeguro: sin GPS usa centro de zona (finito + geohash)
+  ✓ geoPublicoSeguro: con GPS coords aproximadas (~1km) + geohash
+  ✓ geoPublicoSeguro: coords inválidas → centro de zona, nunca NaN
+  ✓ tieneCoords: solo números finitos cuentan
+
+RULES (tests/rules.test.js, emulador): 26 passed (26)   [antes 24]
+  + §20: privado SIN geo_exacta (reporte con contacto sin GPS) es válido
+  + §20: privado con geo_exacta de tipo inválido sigue rechazado
+```
+
+### Andamiaje de repo público — cerrado
+
+- **`CONTRIBUTING.md`** — setup, cómo correr tests (unit + rules), estilo, flujo de PR, principios no negociables.
+- **`CODE_OF_CONDUCT.md`** — tono de respuesta a emergencia, personas afectadas primero.
+- **`.github/ISSUE_TEMPLATE/`** — `bug_report.yml`, `feature_proposal.yml`, `config.yml` (sin issues en blanco; vulnerabilidades → `SECURITY.md`).
+- **`.github/pull_request_template.md`** — checklist con sección de impacto sensible (privacidad / rules / costo / alcance).
+
+### Estado del gate de Fase 1 (sin cambios en lo pendiente)
+
+| Estado | Ítem | Responsable |
+|---|---|---|
+| ✅ | B1, B2, F1, F2, F3 | Aceptado por el jurado |
+| ✅ | Corrección offline (§19), D8, TESTING.md | Aceptado por el jurado |
+| ✅ | **Bug `geo_exacta` (§20) corregido + tests (9 unit + 26 rules)**; andamiaje de repo cerrado | Agente — **cerrado** |
+| ⏳ | **Testeo móvil 3G** (TESTING.md, `/panel?demo=1`) | **Lean** |
+| ⛔ | **Handoff §9-4** — operador semana 2 | **Lean** (bloquea lanzamiento) |
+| ⛔ | **Reclutar 5–10 coordinadores** | **Lean** (bloquea lanzamiento) |
+
+**Fase 1b NO arranca** hasta cerrar esos tres pendientes de Lean. **El gate NO se da por cerrado por el agente.** Staging sin usuarios reales ni datos de víctimas.
