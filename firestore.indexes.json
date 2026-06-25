@@ -33,6 +33,14 @@
         { "fieldPath": "verificacion", "order": "ASCENDING" },
         { "fieldPath": "creada_en", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "recursos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "disponible", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
