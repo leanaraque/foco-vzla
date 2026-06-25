@@ -673,3 +673,64 @@ Claude Code 2 confirma, para el registro:
   pendientes de Lean.
 - **§15–§20 no fueron editadas** — son históricas del equipo anterior.
 
+---
+
+## 22. PIVOTE de modelo — "Mapa público + ayuda mutua + validación por multitud" (Fase 2a, 25 jun 2026)
+
+> Aprobado por el estratega. **§1–§21 son históricas y no se editan.** Este pivote redefine el modelo operativo SIN relajar ninguna guarda de seguridad/privacidad ya validada (§6.2, §9-1, §9-2, App Check, rules). Construcción: **Fase 2a (pre-lanzamiento)**. **Fase 2b NO arranca.**
+
+### 22.1 Qué cambia
+
+El modelo deja de ser **"despacho por coordinadores"** (un cuello de botella que ve y reclama casos) y pasa a **"mapa público + ayuda mutua ciudadana + validación por multitud"**: cualquiera ve el mapa de necesidades, los vecinos cercanos confirman que son reales, y la ayuda se organiza entre ciudadanos. Un operador modera y atiende los casos que la multitud no alcanza a validar.
+
+### 22.2 Usuarios (revisado, reemplaza la tabla §2 a efectos operativos)
+
+| Prioridad | Usuario | Rol en el modelo nuevo |
+|---|---|---|
+| **Primario** | **Ciudadano** (afectado, testigo o vecino que quiere ayudar) | Ve el mapa público, reporta, **confirma** necesidades cercanas, se organiza para ayudar |
+| **Operador** | **Lean** (cumple §9-4) | Modera, atiende la **cola de casos aislados** (`pendiente_revision`), valida coordinadores |
+| Secundario | Coordinador / ONG | Se postula vía formulario; rol verificado para gestión y para leer datos privados |
+
+La decisión clave de §2 ("anclar en el coordinador porque es el cuello de botella") queda **superada**: en emergencia la multitud distribuye la validación y la ayuda; el coordinador deja de ser el único actor.
+
+### 22.3 §9-4 (handoff) — CUMPLIDO
+
+El bloqueante §9-4 ("sin operador definido, no se lanza") queda **satisfecho**: **Lean es el operador** que modera y atiende la cola de aislados. El handoff deja de ser un pendiente abstracto.
+
+### 22.4 §11 (cold-start) reemplazado
+
+La mitigación original del panel vacío (reclutar 5–10 coordinadores antes de lanzar) se reemplaza por **validación por multitud + moderación del operador**: el valor no depende de reclutar coordinadores primero, sino de que los ciudadanos vean y confirmen. El formulario de coordinadores alimenta el rol verificado de forma continua, no como precondición.
+
+### 22.5 Validación por multitud (cambia §5)
+
+- Toda necesidad nace `no_verificada` y es **públicamente visible y marcada** como tal (no se oculta: la multitud necesita verla para confirmarla).
+- Botón **"confirmar que esto es real"** para usuarios cercanos. **Cada uid anónimo confirma una sola vez** (anti-duplicado *en las rules*, no en el cliente).
+- Estados de `verificacion`: `no_verificada` → (**N** confirmaciones) → `confirmada`. **N es bajo y sensible a densidad** (no un 10 fijo): se calcula server-side según cuántos reportes/confirmaciones hay alrededor; acotado a un rango pequeño.
+- **SALVAGUARDA INNEGOCIABLE:** un caso aislado que no alcanza N **nunca se descarta ni se oculta**. Pasa a `pendiente_revision` y se **prioriza** en la cola del operador. El diseño lo hace **MÁS** visible, no menos (badge destacado, orden prioritario en el panel y en el mapa).
+- La validación manual de un coordinador verificado sigue valiendo (equivale a `confirmada`).
+
+### 22.6 Control de costo (§6.2-r1) — obligatorio en la vista pública
+
+La vista pública **no** usa un `onSnapshot` abierto para todos los documentos. Patrón elegido (documentado en §22.8): **lectura puntual paginada con caché-primero** (`getDocs` con `limit`, servida desde IndexedDB cuando hay caché, refresco manual con *cooldown*), no un listener en tiempo real. *Bundles* servidos por CDN quedan como vía de escalada si el tráfico lo exige (Fase 2b).
+
+### 22.7 Alcance de Fase 2a (esta entrega)
+
+1. Reencuadre de mensaje (§9-2): ayuda mutua, **no** rescate; nadie garantiza que alguien acuda; líneas oficiales visibles.
+2. **Vista pública "Mapa"**: lista + mapa interactivo, sin login (con App Check), ubicación **solo a nivel sector**, estado de verificación marcado, detalle con acciones (confirmar / cómo ayudar).
+3. **Validación por multitud** en rules + tests (§22.5).
+4. **Formulario de coordinadores** → email a `hey@leanaraque.com` vía **Resend desde Cloud Function** (key en Secret Manager, nunca en cliente/repo).
+5. **Botón al repo público** (transparencia), discreto.
+6. **Microcopy** por segmento (Reportar/Panel/Recursos/Mapa) sin sacrificar peso (§6.3).
+
+**Fuera de alcance (Fase 2b, NO construir):** centros de ayuda, listas de edificios, deduplicación, SMS/WhatsApp.
+
+### 22.8 (se completa al final de la construcción: patrón de costo, modelo de datos nuevo, medición de bundle y resultados de tests)
+
+### 22.9 Condiciones de lanzamiento (heredadas + nuevas)
+
+- ⛔ **Rotar la API key de Resend** antes de producción (la key actual se compartió en texto plano; la rota Lean). Hasta entonces, no es producción.
+- ⏳ **Test 3G de Lean** (DoD §8) sobre la vista pública nueva.
+- ⏳ **Auditoría del juez** sobre §22 y las rules/tests nuevos.
+
+**El gate de Fase 2a lo cierran el juez + el test 3G de Lean, no el agente.** No se habilita producción ni se cargan datos reales.
+
