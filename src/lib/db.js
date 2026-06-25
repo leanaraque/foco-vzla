@@ -29,11 +29,18 @@ const PAGINA = 25; // tope de documentos por página → factura acotada
 //      ambos setDoc se invocan de forma síncrona (encolan en orden) y solo
 //      esperamos su confirmación con Promise.all en `listo`.
 // Devolvemos { id, listo } donde `listo` se resuelve al confirmar el servidor.
-export function crearNecesidad({ categoria, urgencia, sector, descripcion, lat, lng, contacto }) {
-  // `lat`/`lng` son las coords REALES del GPS, o null/undefined si no se compartió.
-  // El geo público siempre es válido (coords reales o centro de zona); geo_exacta
-  // solo se guarda en el privado si hay GPS real (§20).
-  const geo = geoPublicoSeguro(lat, lng);
+export function crearNecesidad({ categoria, urgencia, sector, descripcion, gps, referencia, contacto }) {
+  // Geo PÚBLICO (siempre a nivel sector ~1km): GPS real si la persona lo compartió
+  // (lo más preciso) → o la REFERENCIA de lugar elegida en el autocompletado (zona
+  // correcta sin GPS, §22.11) → o el centro de zona como último recurso. Las coords
+  // EXACTAS del GPS van SOLO al privado (geo_exacta); la referencia de lugar es un
+  // sector público y por eso NUNCA entra en geo_exacta.
+  const gLat = gps?.lat, gLng = gps?.lng;
+  const rLat = referencia?.lat, rLng = referencia?.lng;
+  const geo =
+    Number.isFinite(gLat) ? geoPublicoSeguro(gLat, gLng) :
+    Number.isFinite(rLat) ? geoPublicoSeguro(rLat, rLng) :
+    geoPublicoSeguro(null, null);
   const uid = auth.currentUser?.uid ?? null; // estampa de autor (F1, D2)
   const ref = doc(collection(db, 'necesidades'));
 
@@ -57,10 +64,11 @@ export function crearNecesidad({ categoria, urgencia, sector, descripcion, lat, 
     actualizada_en: serverTimestamp()
   });
 
-  // (2) Encola el privado DESPUÉS, solo si hay algo sensible (contacto y/o GPS).
+  // (2) Encola el privado DESPUÉS, solo si hay algo sensible: contacto y/o GPS real.
+  //     geo_exacta SOLO desde GPS (la referencia de lugar nunca es "exacta").
   //     Sin await entre ambos: ver punto 3 del comentario superior (offline-first).
   let pPrivado = Promise.resolve();
-  const priv = construirPrivado(uid, contacto, lat, lng);
+  const priv = construirPrivado(uid, contacto, gLat, gLng);
   if (priv) {
     pPrivado = setDoc(doc(db, 'necesidades', ref.id, 'privado', 'datos'), priv);
   }

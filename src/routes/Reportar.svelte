@@ -2,16 +2,18 @@
   import { t } from '../lib/i18n.js';
   import { online, asegurarSesionAnonima } from '../lib/stores.js';
   import { crearNecesidad } from '../lib/db.js';
+  import LugarAutocomplete from '../components/LugarAutocomplete.svelte';
 
   const categorias = ['rescate', 'medico', 'agua', 'alimento', 'refugio', 'otro'];
   const urgencias = ['critica', 'alta', 'media'];
 
   let categoria = '';
   let urgencia = 'alta';
-  let sector = '';
+  let sector = '';           // texto del campo de ubicación (libre o nombre del lugar)
+  let referencia = null;     // lugar elegido del autocompletado { nombre, lat, lng, sectorGeo, municipio }
   let descripcion = '';
   let contacto = '';
-  let lat = null;
+  let lat = null;            // GPS preciso (solo si la persona lo usa)
   let lng = null;
   let gpsEstado = ''; // '', 'buscando', 'ok', 'error'
 
@@ -36,18 +38,19 @@
   async function enviar() {
     error = '';
     if (!categoria) { error = $t('reportar.categoria'); return; }
-    if (!sector && !(lat && lng)) { error = $t('reportar.falta_ubicacion'); return; }
+    if (!sector && !referencia && !(lat && lng)) { error = $t('reportar.falta_ubicacion'); return; }
 
     enviando = true;
     try {
       await asegurarSesionAnonima();
-      // Se pasan las coords REALES (null si no se compartió GPS). La capa de datos
-      // usa un centro de zona para el geo público y omite geo_exacta sin GPS (§20).
-      // El flujo sin GPS funciona completo; el sector textual aporta la ubicación.
+      // GPS = preciso (→ privado). referencia = lugar elegido (→ zona pública correcta
+      // sin GPS). Si solo hay texto libre, la capa de datos usa el centro de zona (§22.11).
       const { listo } = crearNecesidad({
         categoria, urgencia,
-        sector: sector || '(sin sector — ver mapa)',
-        descripcion, lat, lng,
+        sector: sector || (referencia ? referencia.nombre : '(sin sector — ver mapa)'),
+        descripcion,
+        gps: lat != null && lng != null ? { lat, lng } : null,
+        referencia,
         contacto: contacto.trim()
       });
 
@@ -66,7 +69,7 @@
   }
 
   function reset() {
-    categoria = ''; urgencia = 'alta'; sector = ''; descripcion = '';
+    categoria = ''; urgencia = 'alta'; sector = ''; referencia = null; descripcion = '';
     contacto = ''; lat = null; lng = null; gpsEstado = ''; resultado = ''; error = '';
   }
 </script>
@@ -100,7 +103,12 @@
     </div>
 
     <label for="sector">{$t('reportar.ubicacion')}</label>
-    <input id="sector" bind:value={sector} placeholder="Ej: Morón, sector La Playa, calle 3" />
+    <LugarAutocomplete
+      bind:valor={sector}
+      bind:elegido={referencia}
+      on:seleccion={() => { /* coords vienen de la referencia; no tocamos el GPS */ }}
+    />
+    <p class="ayuda">{$t('reportar.ubicacion_ayuda')}</p>
     <div style="margin-top:.5rem">
       <button type="button" class="btn-bloque" on:click={usarGps}>
         📍 {$t('reportar.usar_gps')}
