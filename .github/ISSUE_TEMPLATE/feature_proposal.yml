@@ -1,0 +1,47 @@
+name: "💡 Propuesta"
+description: Sugiere una mejora o funcionalidad para FOCO.
+labels: ["propuesta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        FOCO es una herramienta de respuesta a emergencia: priorizamos privacidad,
+        fiabilidad en redes malas y simplicidad. Las propuestas se evalúan contra
+        el alcance de `MVP-Spec-Mapa-Ayuda-Venezuela.md`. Mantén el peso bajo control.
+  - type: textarea
+    id: problema
+    attributes:
+      label: ¿Qué problema resuelve?
+      description: Empieza por la necesidad real, no por la solución.
+    validations:
+      required: true
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: Propuesta
+      description: Qué cambiarías o añadirías.
+    validations:
+      required: true
+  - type: dropdown
+    id: usuario
+    attributes:
+      label: ¿A quién beneficia?
+      options:
+        - Coordinador de ayuda (usuario primario)
+        - Afectado / testigo que reporta
+        - Diáspora / donante (Fase 2)
+        - Operador / equipo técnico
+    validations:
+      required: true
+  - type: textarea
+    id: costo
+    attributes:
+      label: Costo / riesgos a considerar
+      description: Peso en el cliente, lecturas de Firestore, privacidad, complejidad.
+  - type: checkboxes
+    id: alcance
+    attributes:
+      label: Alcance
+      options:
+        - label: Revisé que no esté ya fuera de alcance o planeado para otra fase en la spec.
+          required: true

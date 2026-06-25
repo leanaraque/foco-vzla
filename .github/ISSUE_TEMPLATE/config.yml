@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "🔒 Reporte de seguridad (privado)"
+    url: https://github.com/leanaraque/foco-vzla/blob/main/SECURITY.md
+    about: "No abras un issue público para vulnerabilidades. Sigue la divulgación responsable."

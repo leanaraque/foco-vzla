@@ -1,0 +1,60 @@
+name: "🐛 Reporte de bug"
+description: Algo no funciona como debería en FOCO.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportar. **No incluyas datos reales de personas afectadas**
+        (nombres, teléfonos, ubicaciones exactas). Si es una vulnerabilidad de
+        seguridad, **no** la reportes aquí: sigue `SECURITY.md`.
+  - type: textarea
+    id: que-paso
+    attributes:
+      label: ¿Qué pasó?
+      description: Describe el problema con claridad.
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para reproducir
+      placeholder: |
+        1. Ir a…
+        2. Pulsar…
+        3. Ver el error
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: ¿Qué esperabas que pasara?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afectada
+      options:
+        - Reportar una necesidad
+        - Panel del coordinador
+        - Recursos
+        - Mapa
+        - Offline / sincronización
+        - Otro
+    validations:
+      required: true
+  - type: input
+    id: entorno
+    attributes:
+      label: Dispositivo / navegador / red
+      placeholder: "Ej: Android gama baja, Chrome, 3G"
+  - type: checkboxes
+    id: confirmaciones
+    attributes:
+      label: Confirmaciones
+      options:
+        - label: No incluí datos reales de personas afectadas.
+          required: true
+        - label: Esto no es una vulnerabilidad de seguridad (esas van por SECURITY.md).
+          required: true
