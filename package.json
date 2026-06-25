@@ -13,7 +13,8 @@
     "deploy": "vite build && firebase deploy",
     "deploy:hosting": "vite build && firebase deploy --only hosting",
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes",
-    "grant:coord": "node scripts/grant-coordinator.mjs"
+    "grant:coord": "node scripts/grant-coordinator.mjs",
+    "prep:lugares": "node scripts/extract-lugares.mjs"
   },
   "dependencies": {
     "firebase": "^11.0.0",

@@ -870,3 +870,51 @@ RULES (tests/rules.test.js, emulador Firestore):
 
 **Fase 2b NO arrancada.** No se habilita producción ni se cargan datos reales. **El gate lo cierran el juez + el test 3G de Lean, no el agente.**
 
+---
+
+## 22.11 Autocompletado de ubicación (OSM) + regresión corregida + Resend (25 jun 2026)
+
+### Regresión "Ocurrió un error" en reportar/recursos/panel — CORREGIDO
+
+**Síntoma reportado por Lean:** todos los botones de guardar (reporte, recurso, formulario del panel) daban *"Ocurrió un error"*.
+
+**Diagnóstico (en vivo con Chrome DevTools MCP):** App Check devolvía 200 y la sesión anónima OK; el fallo era `permission-denied` de Firestore. Causa raíz: en §22.10 las rules pasaron a **exigir `sectorGeo`**, pero el **service worker (PWA) seguía sirviendo el bundle viejo** (sin `sectorGeo`) → toda escritura era rechazada. Reproducido y confirmado: una escritura con el shape nuevo (con `sectorGeo`) y App Check **sí** pasa las rules.
+
+**Corrección:** rebuild + redeploy del frontend (alinea cliente↔rules) y actualización del SW. Verificado en vivo: *"Reporte recibido. Gracias."* **Lección de proceso:** un cambio de rules que añade un campo obligatorio debe desplegarse **junto** con el frontend; los usuarios con SW cacheado ven el error hasta actualizar.
+
+### Resend — key de producción configurada
+
+Lean entregó la key real; se puso en **Secret Manager** (`RESEND_API_KEY`) y se redeployó `solicitarCoordinador`. (La key vive solo en Secret Manager, nunca en el repo.) **Recomendación:** verificar un dominio propio en Resend y ajustar `REMITENTE` para entregabilidad en producción.
+
+### Autocompletado de ubicación — fuente OSM, sin APIs de pago, offline
+
+**Datos (costo runtime cero):** `scripts/extract-lugares.mjs` extrae lugares de **OpenStreetMap vía Overpass API** (gratis, solo en build; mirrors + reintentos + User-Agent) para los municipios afectados (La Guaira/Vargas: Catia La Mar, Maiquetía, La Guaira, Macuto, Caraballeda, Naiguatá, Carayaca; costa de Carabobo: Puerto Cabello, Morón). Genera **`src/lib/lugares.json`** curado: **500 entradas** `{ nombre, tipo, municipio, lat, lng, geohash, sectorGeo }` (geohash y sectorGeo calculados en prep, consistentes con las rules F6/F10), deduplicado y normalizado. **No** incluye la lista privada de edificios del operador (decisión del juez) — solo OSM/oficiales.
+
+**UX (intuitivo, sin confusión):** `LugarAutocomplete.svelte` filtra en el **cliente** (insensible a acentos y mayúsculas), muestra top 6 con etiqueta de 2 líneas (nombre en negrita + *"tipo · municipio"*), navegable con teclado y táctil. Al **seleccionar**: rellena el nombre canónico, guarda lat/lng/sectorGeo y muestra un **chip borrable** (*"📍 Caraballeda · Caraballeda, La Guaira ✕"*) para que la persona vea y pueda cambiar lo elegido. Permite **texto libre** si no hay coincidencia. El botón **GPS** sigue como vía precisa. Microcopy: *"Elegir un lugar lo ubica en el mapa; GPS = ubicación precisa y privada."*
+
+**Integración / privacidad:** la lat/lng de la **referencia elegida** alimenta `geoPublicoSeguro` → el punto del mapa cae en la **zona correcta aun sin GPS** (arregla que todo cayera en un centro genérico). `sectorGeo` se toma de esa referencia. La ubicación pública sigue a **nivel sector** (~1km); las coords **exactas** solo entran al **subdoc privado** vía GPS (la referencia de lugar **nunca** es privada). 
+
+**Peso (§6.3) — medición:** `lugares.json` se carga por **import dinámico** solo al usar el campo → chunk **diferido `lugares` = 12.95 KB gzip** (NO en bundle inicial). App inicial: **24.77 → 26.96 KB gzip** (+2.2 KB del componente). Leaflet sigue diferido. **Cero llamadas de red por tecla** (todo local) → costo runtime cero; offline tras la primera carga (cacheado por el SW).
+
+### Verificación e2e (Chrome DevTools MCP, en vivo)
+
+| Prueba | Resultado |
+|---|---|
+| Filtro insensible a acentos (`carab` → Caraballeda/Carabobo) | ✅ 6 sugerencias |
+| Seleccionar fija coords+sectorGeo | ✅ chip mostrado |
+| Reporte SIN GPS con lugar elegido cae en la zona correcta | ✅ geo=10.61,-66.85 (Caraballeda), **no** el centro Morón; `sectorGeo=d9bkq` |
+| La referencia NO crea subdoc privado | ✅ `/privado/datos` → 404 |
+| Chip borrable y re-elegible | ✅ quitar → vuelve el input |
+| Reportar tras el fix de la regresión | ✅ "Reporte recibido. Gracias." |
+
+(Datos de prueba ficticios creados en vivo y **eliminados** tras verificar.)
+
+### Estado del gate de Fase 2a (sin cambios en lo pendiente de otros)
+
+- ✅ Regresión corregida; autocompletado OSM integrado y verificado e2e; Resend con key real.
+- ⏳ **Auditoría del juez**.
+- ⏳ **Test 3G de Lean** (incluye el nuevo autocompletado en `/reportar`).
+- ✅ La condición previa de "rotar key Resend" queda **cumplida** (key de producción puesta por Lean); se mantiene la recomendación de dominio verificado.
+
+**Fase 2b NO arrancada.** No se habilita producción ni se cargan datos reales. **El gate lo cierran el juez + el test 3G de Lean, no el agente.**
+
