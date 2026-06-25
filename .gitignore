@@ -10,3 +10,4 @@ serviceAccountKey.json
 .DS_Store
 .vite/
 coverage/
+.e2e/

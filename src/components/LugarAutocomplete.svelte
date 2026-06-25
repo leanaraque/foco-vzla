@@ -35,6 +35,40 @@
     }
   }
 
+  // Ranking del filtro local (§23 Iter 1.2): "fácil + exacto".
+  // Score MENOR = mejor. Prioridades:
+  //   0 = nombre comienza con la query (lo más obvio)
+  //   1 = palabra interna del nombre comienza con la query  ("Plaza Bolívar" para "boli")
+  //   2 = nombre contiene la query
+  //   3 = municipio comienza con la query  ("Caracas" para "carac")
+  //   4 = municipio contiene la query
+  // Empates: nombres más cortos primero (más específico que un nombre largo que matchea).
+  // En vez de regex (frágil con escape), recorremos por palabras del nombre.
+  function empiezaPorPalabra(texto, q) {
+    let i = 0;
+    const L = texto.length;
+    while (i < L) {
+      // skip separadores
+      while (i < L && /[\s\-()/.,]/.test(texto[i])) i++;
+      // ¿la palabra que empieza aquí coincide con q?
+      if (i + q.length <= L && texto.slice(i, i + q.length) === q) return true;
+      // saltar al siguiente separador
+      while (i < L && !/[\s\-()/.,]/.test(texto[i])) i++;
+    }
+    return false;
+  }
+
+  function puntuar(l, q) {
+    const n = norm(l.nombre);
+    const m = norm(l.municipio);
+    if (n.startsWith(q)) return { score: 0, len: n.length };
+    if (empiezaPorPalabra(n, q)) return { score: 1, len: n.length };
+    if (n.includes(q)) return { score: 2, len: n.length };
+    if (m.startsWith(q)) return { score: 3, len: n.length };
+    if (m.includes(q)) return { score: 4, len: n.length };
+    return null;
+  }
+
   async function onInput(e) {
     valor = e.target.value;
     // Escribir invalida el lugar previamente elegido (la persona está cambiando).
@@ -45,17 +79,17 @@
     if (q.length < 2) { sugerencias = []; abierto = false; buscoVacio = false; return; }
     await asegurarDatos();
 
-    const res = [];
+    const matches = [];
     for (const l of lugares) {
-      if (norm(l.nombre).includes(q) || norm(l.municipio).includes(q)) {
-        res.push(l);
-        if (res.length >= 6) break;
-      }
+      const p = puntuar(l, q);
+      if (p) matches.push({ l, ...p });
     }
-    sugerencias = res;
+    // Orden por score, luego por longitud del nombre, luego alfabético.
+    matches.sort((a, b) => a.score - b.score || a.len - b.len || a.l.nombre.localeCompare(b.l.nombre));
+    sugerencias = matches.slice(0, 6).map((x) => x.l);
     abierto = true;
     activo = -1;
-    buscoVacio = res.length === 0;
+    buscoVacio = sugerencias.length === 0;
   }
 
   function elegir(l) {
@@ -86,7 +120,7 @@
   {#if elegido}
     <!-- CHIP claro y borrable: la persona VE qué eligió (evita confusión). -->
     <div class="chip-lugar" role="status">
-      <span>📍 {elegido.nombre}<span class="muni"> · {elegido.municipio}</span></span>
+      <span>📍 {elegido.nombre} <span class="muni">· {elegido.municipio}</span></span>
       <button type="button" class="x" on:click={quitar} aria-label={$t('reportar.quitar_lugar')}>✕</button>
     </div>
   {:else}
