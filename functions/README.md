@@ -32,6 +32,9 @@ gcloud projects add-iam-policy-binding $P --member=serviceAccount:843653338754-c
 gcloud projects add-iam-policy-binding $P --member=serviceAccount:843653338754-compute@developer.gserviceaccount.com --role=roles/logging.logWriter --condition=None
 # runtime: acceso a Firestore (sin esto, onConfirmacion da PERMISSION_DENIED)
 gcloud projects add-iam-policy-binding $P --member=serviceAccount:843653338754-compute@developer.gserviceaccount.com --role=roles/datastore.user --condition=None
+# callable público: sin esto el formulario da "The request was not authenticated"
+# (la callable valida App Check/Auth en su código; Cloud Run debe permitir invocación)
+gcloud run services add-iam-policy-binding solicitarcoordinador --region us-central1 --member=allUsers --role=roles/run.invoker --project $P
 # eventarc / pubsub / run (triggers)
 gcloud projects add-iam-policy-binding $P --member=serviceAccount:service-843653338754@gcp-sa-eventarc.iam.gserviceaccount.com --role=roles/eventarc.serviceAgent --condition=None
 gcloud projects add-iam-policy-binding $P --member=serviceAccount:service-843653338754@gcp-sa-pubsub.iam.gserviceaccount.com --role=roles/iam.serviceAccountTokenCreator --condition=None

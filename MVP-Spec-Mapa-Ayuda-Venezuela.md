@@ -882,9 +882,13 @@ RULES (tests/rules.test.js, emulador Firestore):
 
 **Corrección:** rebuild + redeploy del frontend (alinea cliente↔rules) y actualización del SW. Verificado en vivo: *"Reporte recibido. Gracias."* **Lección de proceso:** un cambio de rules que añade un campo obligatorio debe desplegarse **junto** con el frontend; los usuarios con SW cacheado ven el error hasta actualizar.
 
-### Resend — key de producción configurada
+### Resend — key de producción configurada + formulario VERIFICADO en vivo
 
-Lean entregó la key real; se puso en **Secret Manager** (`RESEND_API_KEY`) y se redeployó `solicitarCoordinador`. (La key vive solo en Secret Manager, nunca en el repo.) **Recomendación:** verificar un dominio propio en Resend y ajustar `REMITENTE` para entregabilidad en producción.
+Lean entregó la key real; se puso en **Secret Manager** (`RESEND_API_KEY`) y se redeployó `solicitarCoordinador`. (La key vive solo en Secret Manager, nunca en el repo.)
+
+**Bug del formulario del Panel — CORREGIDO:** la primera prueba en vivo dio *"No se pudo enviar"*. Los logs mostraron que **no era Resend** sino Cloud Run: *"The request was not authenticated. Empty Authorization header value."* Una **callable** (`onCall`) valida App Check/Auth en su propio código, así que el servicio de Cloud Run debe **permitir invocación pública**; ese binding **no se aplicó** en el primer despliegue 2ª gen (cuando falló el bootstrap de IAM). Fix: `gcloud run services add-iam-policy-binding solicitarcoordinador --member=allUsers --role=roles/run.invoker` (documentado en `functions/README.md`).
+
+**Verificado en vivo (Chrome DevTools MCP):** postulación enviada → *"¡Gracias! Recibimos tu postulación y te contactaremos."* y **sin errores en los logs de la función → Resend aceptó el envío** del correo a `hey@leanaraque.com`. **Recomendación:** verificar un dominio propio en Resend y ajustar `REMITENTE` (hoy `onboarding@resend.dev`) para entregabilidad amplia en producción.
 
 ### Autocompletado de ubicación — fuente OSM, sin APIs de pago, offline
 
