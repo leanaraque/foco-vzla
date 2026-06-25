@@ -41,15 +41,13 @@
     enviando = true;
     try {
       await asegurarSesionAnonima();
-      // Si no hay GPS, usamos un centro aproximado por defecto (se ajustará por el
-      // sector textual). Mantiene el flujo bajo 60s sin bloquear por permisos.
-      const fLat = lat ?? 10.49; // ~Morón/Carabobo, zona del evento
-      const fLng = lng ?? -68.20;
-
+      // Se pasan las coords REALES (null si no se compartió GPS). La capa de datos
+      // usa un centro de zona para el geo público y omite geo_exacta sin GPS (§20).
+      // El flujo sin GPS funciona completo; el sector textual aporta la ubicación.
       const { listo } = crearNecesidad({
         categoria, urgencia,
         sector: sector || '(sin sector — ver mapa)',
-        descripcion, lat: fLat, lng: fLng,
+        descripcion, lat, lng,
         contacto: contacto.trim()
       });
 

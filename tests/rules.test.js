@@ -126,6 +126,18 @@ describe('privado — escritura abusiva [F1]', () => {
     await assertSucceeds(setDoc(doc(anon('anon1'), 'necesidades/p1/privado/datos'), privado('anon1')));
   });
 
+  test('§20: privado SIN geo_exacta (reporte con contacto sin GPS) es válido', async () => {
+    await assertSucceeds(
+      setDoc(doc(anon('anon1'), 'necesidades/p1/privado/datos'), { creador: 'anon1', contacto: '0414-1234567' })
+    );
+  });
+
+  test('§20: privado con geo_exacta de tipo inválido sigue rechazado', async () => {
+    await assertFails(
+      setDoc(doc(anon('anon1'), 'necesidades/p1/privado/datos'), { creador: 'anon1', contacto: '0414', geo_exacta: { lat: null, lng: null } })
+    );
+  });
+
   test('otro anónimo NO puede inyectar el privado de una necesidad ajena', async () => {
     await assertFails(setDoc(doc(anon('anon2'), 'necesidades/p1/privado/datos'), privado('anon2')));
   });

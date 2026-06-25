@@ -37,7 +37,7 @@
       await asegurarSesionAnonima();
       const { listo } = crearRecurso({
         categoria, sector: sector || '(sin sector)', descripcion,
-        lat: lat ?? 10.49, lng: lng ?? -68.20, contacto: contacto.trim()
+        lat, lng, contacto: contacto.trim()
       });
       if ($online) await listo; else listo.catch(() => {});
       okMsg = $t('reportar.ok');

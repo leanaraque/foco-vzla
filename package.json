@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:unit": "vitest run tests/payload.test.js",
     "test:rules": "vitest run tests/rules.test.js",
     "emulators": "firebase emulators:start --only firestore,auth",
     "deploy": "vite build && firebase deploy",

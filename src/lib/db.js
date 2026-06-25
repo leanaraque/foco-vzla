@@ -6,7 +6,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, auth } from './firebase.js';
-import { geoPublico } from './geo.js';
+import { geoPublicoSeguro, construirPrivado } from './payload.js';
 
 const PAGINA = 25; // tope de documentos por página → factura acotada
 
@@ -30,7 +30,10 @@ const PAGINA = 25; // tope de documentos por página → factura acotada
 //      esperamos su confirmación con Promise.all en `listo`.
 // Devolvemos { id, listo } donde `listo` se resuelve al confirmar el servidor.
 export function crearNecesidad({ categoria, urgencia, sector, descripcion, lat, lng, contacto }) {
-  const geo = geoPublico(lat, lng);
+  // `lat`/`lng` son las coords REALES del GPS, o null/undefined si no se compartió.
+  // El geo público siempre es válido (coords reales o centro de zona); geo_exacta
+  // solo se guarda en el privado si hay GPS real (§20).
+  const geo = geoPublicoSeguro(lat, lng);
   const uid = auth.currentUser?.uid ?? null; // estampa de autor (F1, D2)
   const ref = doc(collection(db, 'necesidades'));
 
@@ -50,15 +53,12 @@ export function crearNecesidad({ categoria, urgencia, sector, descripcion, lat, 
     actualizada_en: serverTimestamp()
   });
 
-  // (2) Encola el privado DESPUÉS (solo si hay contacto o coords que proteger).
+  // (2) Encola el privado DESPUÉS, solo si hay algo sensible (contacto y/o GPS).
   //     Sin await entre ambos: ver punto 3 del comentario superior (offline-first).
   let pPrivado = Promise.resolve();
-  if (contacto || (lat && lng)) {
-    pPrivado = setDoc(doc(db, 'necesidades', ref.id, 'privado', 'datos'), {
-      creador: uid,
-      contacto: contacto || '',
-      geo_exacta: { lat, lng }
-    });
+  const priv = construirPrivado(uid, contacto, lat, lng);
+  if (priv) {
+    pPrivado = setDoc(doc(db, 'necesidades', ref.id, 'privado', 'datos'), priv);
   }
 
   return { id: ref.id, listo: Promise.all([pNecesidad, pPrivado]) };
@@ -68,7 +68,7 @@ export function crearNecesidad({ categoria, urgencia, sector, descripcion, lat, 
 // Mismo orden que crearNecesidad: recurso (padre) primero, privado después,
 // escrituras separadas (no batch), sin await intermedio. Ver §19.
 export function crearRecurso({ categoria, sector, descripcion, lat, lng, contacto }) {
-  const geo = geoPublico(lat, lng);
+  const geo = geoPublicoSeguro(lat, lng);
   const uid = auth.currentUser?.uid ?? null;
   const ref = doc(collection(db, 'recursos'));
 
@@ -83,8 +83,9 @@ export function crearRecurso({ categoria, sector, descripcion, lat, lng, contact
   });
 
   let pPrivado = Promise.resolve();
-  if (contacto) {
-    pPrivado = setDoc(doc(db, 'recursos', ref.id, 'privado', 'datos'), { creador: uid, contacto });
+  const priv = construirPrivado(uid, contacto, lat, lng);
+  if (priv) {
+    pPrivado = setDoc(doc(db, 'recursos', ref.id, 'privado', 'datos'), priv);
   }
 
   return { id: ref.id, listo: Promise.all([pRecurso, pPrivado]) };
