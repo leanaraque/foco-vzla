@@ -64,6 +64,60 @@ export function filtrarLocal(lugares, query, max = 6) {
   return matches.slice(0, max).map((x) => x.l);
 }
 
+// Photon devuelve nombres de estado y división administrativa en inglés (p.ej.
+// "Sucre State", "Capital District", "Tachira State"). Normalizamos al español
+// con tildes para que la etiqueta sea consistente con los lugares locales.
+const ESTADOS_VE = {
+  'amazonas state': 'Amazonas',
+  'anzoategui state': 'Anzoátegui',
+  'apure state': 'Apure',
+  'aragua state': 'Aragua',
+  'barinas state': 'Barinas',
+  'bolivar state': 'Bolívar',
+  'capital district': 'Distrito Capital',
+  'carabobo state': 'Carabobo',
+  'cojedes state': 'Cojedes',
+  'delta amacuro state': 'Delta Amacuro',
+  'falcon state': 'Falcón',
+  'federal dependencies of venezuela': 'Dependencias Federales',
+  'guarico state': 'Guárico',
+  'la guaira state': 'La Guaira',
+  'vargas state': 'La Guaira',          // antiguo nombre del estado
+  'lara state': 'Lara',
+  'merida state': 'Mérida',
+  'miranda state': 'Miranda',
+  'monagas state': 'Monagas',
+  'nueva esparta state': 'Nueva Esparta',
+  'portuguesa state': 'Portuguesa',
+  'sucre state': 'Sucre',
+  'tachira state': 'Táchira',
+  'trujillo state': 'Trujillo',
+  'yaracuy state': 'Yaracuy',
+  'zulia state': 'Zulia'
+};
+
+export function normalizarEstadoPhoton(s) {
+  if (!s) return s;
+  const k = normaliza(s);
+  return ESTADOS_VE[k] || s;
+}
+
+// "Parroquia Lechería" / "Municipio Liberta" → mantenemos como vienen (ya están
+// en español). Pero hay casos en inglés ("Municipality of X") que normalizamos.
+const PREFIJOS_INGLES = [
+  ['municipality of ', 'Municipio '],
+  ['parish of ', 'Parroquia ']
+];
+
+export function normalizarCiudadPhoton(s) {
+  if (!s) return s;
+  const low = s.toLowerCase();
+  for (const [from, to] of PREFIJOS_INGLES) {
+    if (low.startsWith(from)) return to + s.slice(from.length);
+  }
+  return s;
+}
+
 // Mapea un feature GeoJSON de Photon al shape interno {nombre, tipo, municipio,
 // lat, lng, geohash, sectorGeo}. Devuelve `null` si el feature no cumple los
 // mínimos (sin coords, sin nombre, fuera de Venezuela).
@@ -82,8 +136,8 @@ export function photonAGusto(feature) {
   if (!nombre) return null;
   // Construir "Ciudad, Estado" para el campo municipio (legible y consistente
   // con los lugares locales). Fallback a county/district si city falta.
-  const ciudad = p.city || p.county || p.district || p.locality || '';
-  const estado = p.state || '';
+  const ciudad = normalizarCiudadPhoton(p.city || p.county || p.district || p.locality || '');
+  const estado = normalizarEstadoPhoton(p.state || '');
   const municipio = [ciudad, estado].filter(Boolean).join(', ').trim() || 'Venezuela';
   const tipo = photonATipo(p);
   const geohash = geohashForLocation([lat, lng]);
@@ -121,6 +175,62 @@ export function photonATipo(p) {
   if (key === 'highway' || key === 'street') return 'calle';
   if (key === 'building') return 'edificio';
   return 'lugar';
+}
+
+// Divide `texto` en partes según las ocurrencias de `query` (ya normalizada).
+// La comparación es insensible a acentos/mayúsculas: matchea sobre la versión
+// normalizada del texto pero devuelve los CARACTERES ORIGINALES (con tildes y
+// mayúsculas como vinieron). Útil para hacer highlight con <mark> en la UI.
+//
+// Devuelve: [{ t: 'sub', match: bool }, ...]
+//   - "Plaza Bolívar" + query="bol" →
+//       [{t:'Plaza ',match:false},{t:'Bol',match:true},{t:'ívar',match:false}]
+//   - "Mérida" + query="merida" →
+//       [{t:'Mérida',match:true}]  (match completo, normalización absorbe el í)
+//
+// Casos límite: query vacía o sin matches → devuelve [{t: texto, match: false}].
+export function marcar(texto, query) {
+  if (!texto) return [];
+  if (!query || query.length === 0) return [{ t: texto, match: false }];
+  const txt = String(texto);
+  const tNorm = normaliza(txt);
+  // Mapa de índices: normaliza puede acortar el texto (eliminar combinantes).
+  // Iteramos sobre el original carácter a carácter para mantener la posición
+  // de cada char y comparamos su versión normalizada acumulada.
+  // Atajo: como normaliza usa NFD que SOLO descompone, cada char original
+  // produce 1 char base + 0+ combinantes; entonces normalizando char a char
+  // y descartando combinantes (que ya quita normaliza), la longitud de la
+  // forma normalizada de cada char original es 1 (excepto si el char ya era
+  // un combinante; tratamos eso como 0).
+  const mapa = [];   // mapa[iOrig] = posición en tNorm
+  let pos = 0;
+  for (let i = 0; i < txt.length; i++) {
+    mapa.push(pos);
+    const segN = normaliza(txt[i]);
+    pos += segN.length;
+  }
+  mapa.push(pos);  // sentinela final
+
+  const out = [];
+  let iOrig = 0;
+  while (iOrig < txt.length) {
+    const posN = mapa[iOrig];
+    if (tNorm.startsWith(query, posN)) {
+      // Encontrar dónde termina el match en el original (donde mapa[j] llega a posN+query.length).
+      let jOrig = iOrig;
+      while (jOrig < txt.length && mapa[jOrig + 1] - posN < query.length) jOrig++;
+      // mapa[jOrig+1] - posN >= query.length → jOrig es el último char incluido
+      out.push({ t: txt.slice(iOrig, jOrig + 1), match: true });
+      iOrig = jOrig + 1;
+    } else {
+      // acumular chars no-match hasta encontrar el siguiente match o EOF
+      let jOrig = iOrig + 1;
+      while (jOrig < txt.length && !tNorm.startsWith(query, mapa[jOrig])) jOrig++;
+      out.push({ t: txt.slice(iOrig, jOrig), match: false });
+      iOrig = jOrig;
+    }
+  }
+  return out;
 }
 
 // Quita duplicados entre la lista local y la remota usando (nombre+municipio

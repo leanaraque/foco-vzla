@@ -9,7 +9,10 @@ import {
   photonAGusto,
   dedupe,
   dentroDeVenezuela,
-  BBOX_VENEZUELA
+  BBOX_VENEZUELA,
+  normalizarEstadoPhoton,
+  normalizarCiudadPhoton,
+  marcar
 } from '../src/lib/autocomplete.js';
 
 describe('normaliza', () => {
@@ -199,6 +202,95 @@ describe('photonAGusto', () => {
   test('sin city ni county → solo estado', () => {
     const r = photonAGusto(feature({ city: undefined, county: undefined }));
     expect(r.municipio).toBe('Distrito Capital');
+  });
+});
+
+describe('normalizarEstadoPhoton', () => {
+  test('estados de Venezuela en inglés → español con tildes', () => {
+    expect(normalizarEstadoPhoton('Sucre State')).toBe('Sucre');
+    expect(normalizarEstadoPhoton('Tachira State')).toBe('Táchira');
+    expect(normalizarEstadoPhoton('Merida State')).toBe('Mérida');
+    expect(normalizarEstadoPhoton('Capital District')).toBe('Distrito Capital');
+    expect(normalizarEstadoPhoton('Bolivar State')).toBe('Bolívar');
+    expect(normalizarEstadoPhoton('Anzoategui State')).toBe('Anzoátegui');
+    expect(normalizarEstadoPhoton('Vargas State')).toBe('La Guaira'); // alias histórico
+  });
+  test('estado desconocido → se devuelve tal cual', () => {
+    expect(normalizarEstadoPhoton('Pasadena State')).toBe('Pasadena State');
+  });
+  test('vacío/null pasa derecho', () => {
+    expect(normalizarEstadoPhoton('')).toBe('');
+    expect(normalizarEstadoPhoton(null)).toBe(null);
+  });
+});
+
+describe('normalizarCiudadPhoton', () => {
+  test('"Municipality of X" → "Municipio X"', () => {
+    expect(normalizarCiudadPhoton('Municipality of Chacao')).toBe('Municipio Chacao');
+  });
+  test('"Parish of X" → "Parroquia X"', () => {
+    expect(normalizarCiudadPhoton('Parish of Lechería')).toBe('Parroquia Lechería');
+  });
+  test('si ya viene en español → no cambia', () => {
+    expect(normalizarCiudadPhoton('Municipio Liberta')).toBe('Municipio Liberta');
+    expect(normalizarCiudadPhoton('Caracas')).toBe('Caracas');
+  });
+});
+
+describe('photonAGusto (con normalización Iter 3)', () => {
+  const feature = (over = {}) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [-66.9146, 10.5061] },
+    properties: {
+      name: 'Av Sucre', osm_key: 'highway', osm_value: 'residential',
+      city: 'Caracas', state: 'Capital District', country: 'Venezuela', ...over
+    }
+  });
+  test('estado en inglés → español tildado', () => {
+    const r = photonAGusto(feature({ state: 'Tachira State', city: 'San Cristóbal' }));
+    expect(r.municipio).toBe('San Cristóbal, Táchira');
+  });
+  test('Capital District → Distrito Capital', () => {
+    const r = photonAGusto(feature());
+    expect(r.municipio).toBe('Caracas, Distrito Capital');
+  });
+});
+
+describe('marcar (highlight de matches)', () => {
+  test('match al inicio', () => {
+    expect(marcar('Plaza Bolívar', 'plaza')).toEqual([
+      { t: 'Plaza', match: true },
+      { t: ' Bolívar', match: false }
+    ]);
+  });
+  test('match con acento en el texto (query sin acento)', () => {
+    const r = marcar('Mérida', 'merida');
+    expect(r).toEqual([{ t: 'Mérida', match: true }]);
+  });
+  test('match parcial en mitad', () => {
+    expect(marcar('Maiquetía', 'queti')).toEqual([
+      { t: 'Mai', match: false },
+      { t: 'quetí', match: true },
+      { t: 'a', match: false }
+    ]);
+  });
+  test('sin match → un solo fragmento sin marcar', () => {
+    expect(marcar('Caracas', 'xyz')).toEqual([{ t: 'Caracas', match: false }]);
+  });
+  test('query vacía → texto entero sin marcar', () => {
+    expect(marcar('Caracas', '')).toEqual([{ t: 'Caracas', match: false }]);
+  });
+  test('texto vacío → []', () => {
+    expect(marcar('', 'x')).toEqual([]);
+  });
+  test('uniendo todos los fragmentos se recupera el texto original', () => {
+    const casos = ['Mérida', 'Av. Sucre', 'San Cristóbal del Táchira', 'Plaza Bolívar'];
+    const queries = ['mer', 'sucre', 'san', 'plaza'];
+    for (let i = 0; i < casos.length; i++) {
+      const partes = marcar(casos[i], queries[i]);
+      const reconstruido = partes.map((p) => p.t).join('');
+      expect(reconstruido).toBe(casos[i]);
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../lib/i18n.js';
-  import { normaliza, filtrarLocal, photonAGusto, dedupe } from '../lib/autocomplete.js';
+  import { normaliza, filtrarLocal, photonAGusto, dedupe, marcar } from '../lib/autocomplete.js';
 
   // El padre pasa el texto del campo (bind) y recibe eventos:
   //  - 'seleccion' con { nombre, lat, lng, sectorGeo, municipio } al elegir un lugar
@@ -18,6 +18,7 @@
   let abierto = false;
   let activo = -1;          // índice resaltado (teclado)
   let buscoVacio = false;
+  let qActual = '';   // normalizada, para resaltar en sugerencias
 
   // --- Photon (fallback remoto) ----------------------------------------
   // Cuando lo local devuelve <4 sugerencias, consultamos Photon limitado a
@@ -107,6 +108,7 @@
     dispatch('texto', valor);
 
     const q = normaliza(valor);
+    qActual = q;
     if (q.length < 2) {
       sugerencias = []; abierto = false; buscoVacio = false;
       clearTimeout(timerPhoton); if (abortePhoton) abortePhoton.abort();
@@ -185,10 +187,10 @@
             on:mouseenter={() => (activo = i)}
           >
             <span class="nom">
-              {l.nombre}
+              <span class="nom-txt">{#each marcar(l.nombre, qActual) as parte}{#if parte.match}<mark>{parte.t}</mark>{:else}{parte.t}{/if}{/each}</span>
               {#if l._origen === 'photon'}<span class="badge-osm" title="Resultado adicional de OpenStreetMap">+ OSM</span>{/if}
             </span>
-            <span class="sub">{l.tipo} · {l.municipio}</span>
+            <span class="sub">{l.tipo} · {#each marcar(l.municipio, qActual) as parte}{#if parte.match}<mark>{parte.t}</mark>{:else}{parte.t}{/if}{/each}</span>
           </li>
         {/each}
         {#if cargandoRemoto}
@@ -220,6 +222,10 @@
   .lista li.activo { background: #eaf2fb; }
   .lista li.estado { cursor: default; color: var(--gris); font-size: 0.82rem; font-style: italic; }
   .nom { font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
+  .nom-txt { flex: 1; min-width: 0; }
+  .nom mark, .sub mark {
+    background: #fff3a8; color: inherit; padding: 0 1px; border-radius: 2px;
+  }
   .badge-osm {
     background: var(--gris-claro); color: var(--gris); font-weight: 700;
     font-size: 0.68rem; padding: 0.05rem 0.4rem; border-radius: 999px;
