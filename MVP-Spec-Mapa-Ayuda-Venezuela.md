@@ -767,10 +767,24 @@ Sin librerías nuevas pesadas; lazy-load del mapa y del SDK de functions preserv
 
 **Tests ejecutados:** `9 unit` (payload) + `34 rules` (incluye 8 de validación por multitud: confirmar una vez por uid, no duplicar, no suplantar, contador no editable por cliente, y **aislado visible**). Salida en el commit y reproducible con `npm run test:unit` y el emulador.
 
+**Cloud Functions — desplegadas y ACTIVE (GEN_2, us-central1, node22):** `solicitarCoordinador`, `onConfirmacion`, `marcarAislados`. Primer despliegue de 2ª gen requirió conceder roles a los service agents (build SA `cloudbuild.builds.builder`/`artifactregistry.writer`/`logging.logWriter`, **runtime SA `datastore.user`** — sin él `onConfirmacion` daba `PERMISSION_DENIED`—, eventarc service agent, pubsub `serviceAccountTokenCreator`, run.invoker/eventReceiver) — documentado en `functions/README.md` por si se replica.
+
+**Prueba funcional del contador (verificada end-to-end):**
+- Densidad 1 (geohash único) → umbral 2 → **2 confirmaciones marcaron `confirmada` en <10 s** ✅.
+- Con varias necesidades acumuladas en el mismo sector → umbral subió a 3 → 2 confirmaciones **no** marcaron (la **sensibilidad a densidad funciona**, no es N fijo).
+- El contador `confirmaciones` lo escribe solo la función (Admin); el cliente no puede (probado en rules).
+
+El correo de `solicitarCoordinador` queda inactivo hasta que Lean ponga la key rotada (§22.9).
+
 ### 22.9 Condiciones de lanzamiento (heredadas + nuevas)
 
-- ⛔ **Rotar la API key de Resend** antes de producción (la key actual se compartió en texto plano; la rota Lean). Hasta entonces, no es producción.
-- ⏳ **Test 3G de Lean** (DoD §8) sobre la vista pública nueva.
+- ⛔ **Rotar la API key de Resend** antes de producción. La key compartida en texto plano queda **comprometida y NO se usa**. En Secret Manager se puso un **placeholder** (`PLACEHOLDER_rotar_antes_de_prod`), por lo que el envío de correo de postulación **no funcionará hasta que Lean ponga la key rotada**:
+  ```
+  firebase functions:secrets:set RESEND_API_KEY   # pega la NUEVA key
+  firebase deploy --only functions:solicitarCoordinador
+  ```
+  Además, verificar un dominio en Resend y ajustar `REMITENTE` en `functions/index.js`.
+- ⏳ **Test 3G de Lean** (DoD §8) sobre la vista pública nueva (`/mapa`, y `/mapa?demo=1`).
 - ⏳ **Auditoría del juez** sobre §22 y las rules/tests nuevos.
 
 **El gate de Fase 2a lo cierran el juez + el test 3G de Lean, no el agente.** No se habilita producción ni se cargan datos reales.
