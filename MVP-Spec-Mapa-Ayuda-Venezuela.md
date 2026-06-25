@@ -769,12 +769,9 @@ Sin librerías nuevas pesadas; lazy-load del mapa y del SDK de functions preserv
 
 **Cloud Functions — desplegadas y ACTIVE (GEN_2, us-central1, node22):** `solicitarCoordinador`, `onConfirmacion`, `marcarAislados`. Primer despliegue de 2ª gen requirió conceder roles a los service agents (build SA `cloudbuild.builds.builder`/`artifactregistry.writer`/`logging.logWriter`, **runtime SA `datastore.user`** — sin él `onConfirmacion` daba `PERMISSION_DENIED`—, eventarc service agent, pubsub `serviceAccountTokenCreator`, run.invoker/eventReceiver) — documentado en `functions/README.md` por si se replica.
 
-**Prueba funcional del contador (verificada end-to-end):**
-- Densidad 1 (geohash único) → umbral 2 → **2 confirmaciones marcaron `confirmada` en <10 s** ✅.
-- Con varias necesidades acumuladas en el mismo sector → umbral subió a 3 → 2 confirmaciones **no** marcaron (la **sensibilidad a densidad funciona**, no es N fijo).
-- El contador `confirmaciones` lo escribe solo la función (Admin); el cliente no puede (probado en rules).
-
 El correo de `solicitarCoordinador` queda inactivo hasta que Lean ponga la key rotada (§22.9).
+
+> **CORRECCIÓN (falso positivo retirado):** una versión anterior de esta sección afirmó que la sensibilidad a densidad estaba "verificada" porque con datos de prueba el umbral subió a 3. **Era un falso positivo**: esos geohashes de test eran cortos e idénticos (5 chars), y `calcularUmbral` usaba un rango sobre `geo.geohash` con límite superior no-op (F6) que con geohashes **reales** (~10 chars) daba densidad ~0 y umbral fijo en 2. Corregido en §22.10.
 
 ### 22.9 Condiciones de lanzamiento (heredadas + nuevas)
 
@@ -788,4 +785,88 @@ El correo de `solicitarCoordinador` queda inactivo hasta que Lean ponga la key r
 - ⏳ **Auditoría del juez** sobre §22 y las rules/tests nuevos.
 
 **El gate de Fase 2a lo cierran el juez + el test 3G de Lean, no el agente.** No se habilita producción ni se cargan datos reales.
+
+---
+
+## 22.10 Bloqueantes de la auditoría de código — corregidos (25 jun 2026)
+
+> El juez auditó el **código** de Fase 2a y aprobó: Resend en Secret Manager, App Check en el callable, contador solo-función, anti-duplicado, salvaguarda del aislado, bundle. Encontró tres bloqueantes (F10/F6/F7), corregidos aquí con **verificación honesta usando geohashes reales** (no falsos positivos).
+
+### F10 (GRAVE) — autoconfirmación de casos falsos — CERRADO
+
+**Riesgo:** `validNuevaNecesidad` no restringía claves ni forzaba el contador. Un reportante podía crear `{ confirmaciones: 9999 }`; `onConfirmacion` hacía `(n.confirmaciones||0)+1 ≥ umbral` → marcaba `confirmada` con **una sola** confirmación propia → autoconfirmar un caso falso (lo más peligroso de publicar).
+
+**Corrección (defensa en dos capas):**
+1. **Rules:** `validNuevaNecesidad` ahora exige `keys().hasOnly([lista explícita])` (bloquea claves desconocidas, incl. dentro de `geo`) y `(!('confirmaciones' in d) || d.confirmaciones == 0)`. `validNuevoRecurso` también con `hasOnly`.
+2. **Función:** `onConfirmacion` **ya no confía** en el campo denormalizado; deriva el conteo **real** de la subcolección con agregación `COUNT` (1 por uid, deduplicada por rules).
+
+**Evidencia (tests de rules, emulador):**
+```
+✓ F10: rechaza nacer con confirmaciones>0 (anti-autoconfirmación)
+✓ F10: acepta confirmaciones==0 explícito
+✓ F10: rechaza clave desconocida (hasOnly)
+✓ F10: rechaza clave desconocida dentro de geo
+✓ F6/F10: rechaza sectorGeo que NO coincide con el prefijo del geohash
+✓ F6/F10: rechaza necesidad SIN sectorGeo
+  Tests  6 passed | (de 40 rules totales)
+```
+
+### F6 — sensibilidad a densidad — CERRADO (con geohashes reales)
+
+**Causa:** el límite superior del rango (`pref + ''`) era no-op; con geohashes reales (~10 chars) la densidad daba ~0 y el umbral quedaba fijo en 2.
+
+**Corrección:** cada necesidad estampa `sectorGeo` = prefijo de geohash (5 chars), **validado en rules** (`sectorGeo == geo.geohash[0:5]`); la densidad usa `where('sectorGeo','==',pref)` (igualdad, no rango) con `COUNT`.
+
+**Verificación HONESTA end-to-end (geohashes REALES de geofire-common, ~10 chars, visibles):**
+```
+ESCENARIO A — zona VACÍA
+  geohash real: d3t2ug9wws  | sectorGeo: d3t2u
+  2 confirmaciones → verificacion=confirmada     ✅ umbral 2
+
+ESCENARIO B — sector DENSO (6 vecinos reales + target, mismo sector d3ze8)
+  vecinos: d3ze8jdk8v, d3ze8jdqrv, d3ze8jf8nv, d3ze8jfcvv, d3ze8jg5sv, d3ze8jgm7v
+  target:  d3ze8jdkej  | sectorGeo: d3ze8
+  2 confirmaciones → verificacion=no_verificada  ✅ umbral subió (>2): 2 no basta
+  3 confirmaciones → verificacion=confirmada     ✅ alcanzó umbral 3
+```
+La sensibilidad a densidad **ahora funciona con datos reales**. Datos de prueba ficticios (`TEST_*`), en la colección real pero **eliminados tras la prueba**.
+
+### F7 — costo de la query de densidad — CERRADO
+
+La query de densidad salió de `runTransaction` y usa **agregación `COUNT`** (≈1 lectura por confirmación, en vez de ~20). El conteo de confirmaciones también es `COUNT`.
+
+### Salvaguarda del aislado — verificada end-to-end
+
+```
+necesidad no_verificada con creada_en de hace 7h → (ejecutar marcarAislados) →
+  t+10s → verificacion: pendiente_revision   ✅ a la cola del operador, NO oculta
+```
+(Requirió un índice compuesto `verificacion + creada_en`, ya `READY`.)
+
+### Verificación de rechazo en producción — nota honesta
+
+Las escrituras que hice para sembrar/probar usan el token OAuth de gcloud (Admin), que **bypassa rules y App Check** por diseño; por eso el rechazo de un `create` con `confirmaciones>0` **no** se puede demostrar "en vivo" con ese token. La prueba canónica del rechazo son los **tests de rules en el emulador** (arriba, 6 verdes con `assertFails`). Lo digo explícitamente para no dar un falso positivo.
+
+### Tests — salida COMPLETA
+
+```
+UNIT (tests/payload.test.js, sin emulador):
+  Test Files  1 passed (1)
+  Tests  9 passed (9)
+
+RULES (tests/rules.test.js, emulador Firestore):
+  Test Files  1 passed (1)
+  Tests  40 passed (40)
+```
+(34 → 40: +6 de F10/F6. Reproducible: `npm run test:unit` y `firebase emulators:exec --only firestore "npm run test:rules"`.)
+
+### Estado del gate de Fase 2a tras §22.10
+
+- ✅ F10, F6, F7 corregidos; verificación honesta con geohashes reales; 9 unit + 40 rules.
+- ✅ Funciones redeployadas (`onConfirmacion`, `marcarAislados`); índice compuesto READY.
+- ⏳ **Auditoría del juez** sobre §22.10.
+- ⏳ **Test 3G de Lean** sobre la vista pública.
+- ⛔ **Rotar la key de Resend** (placeholder en staging; el correo no funciona hasta entonces).
+
+**Fase 2b NO arrancada.** No se habilita producción ni se cargan datos reales. **El gate lo cierran el juez + el test 3G de Lean, no el agente.**
 
