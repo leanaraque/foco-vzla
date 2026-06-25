@@ -423,3 +423,40 @@ El repo será **público**. Implicaciones tratadas:
 - ⛔ **Handoff §9-4** y **reclutar 5–10 coordinadores** — pendientes de Lean; bloquean lanzamiento, no build.
 
 **El gate NO se da por cerrado por el agente.** Staging sin usuarios reales ni datos de víctimas hasta el visto bueno del jurado y el handoff.
+
+---
+
+## 19. Correctitud offline-first + decisión `creador` (25 jun 2026)
+
+> Mitad de seguridad del gate aprobada por el jurado (F1/F2/F3 verificados en código). Estas son notas de cierre de los pendientes **del agente**; los que faltan son de Lean.
+
+### Corrección — orden de escritura del par necesidad + contacto
+
+**Nota del jurado (correctitud offline-first):** la regla `create` de `/privado/datos` hace `get()` de la necesidad padre para validar autoría (F1). Por tanto el par necesidad+contacto **no puede** escribirse como `writeBatch`/transacción atómica: en un commit atómico el `get()` no ve aún el padre y el contacto se rechaza al sincronizar.
+
+**Estado del código corregido** (`src/lib/db.js`, `crearNecesidad`/`crearRecurso`):
+- **No se usa `writeBatch` ni `runTransaction`** en ningún punto (verificado). Son **dos escrituras separadas**.
+- La **necesidad (padre) se encola primero** y el **privado después**. Firestore mantiene una cola FIFO de mutaciones y las confirma una a una → el padre se commitea antes y la regla del privado ya lo ve.
+- **No se hace `await` entre ambas**: estando offline ese `await` no resolvería hasta reconectar (resuelve con el ack del servidor) y el contacto **nunca** llegaría a la cola local (rompería offline-first §6.1). Ambos `setDoc` se invocan de forma síncrona —encolan en orden— y solo se espera su confirmación con `Promise.all` en `listo`.
+- `/reportar` consume `{ id, listo }`: online hace `await listo`; offline marca "guardado sin conexión" sin esperar (las escrituras ya están encoladas). El comentario en el código explica el porqué. **Lo valida el paso 3 de TESTING.md.**
+
+### Decisión — `creador` en el doc público (D8)
+
+Se evaluó la nota menor del jurado (al verificar, `creador` queda público y permite correlación). **Decisión: se mantiene en el doc público**, porque la regla F1 valida la autoría del privado leyendo `parent.creador` y la dedup de Fase 1b lo necesita. Es un uid anónimo (no PII). Riesgo residual y mitigación futura quedan en **§9-1**; decisión registrada como **D8** (§13).
+
+### Kit de testeo para Lean
+
+Checklist reproducible del DoD §8 en **[TESTING.md](TESTING.md)**: carga 3G + TTI, reporte <60s, reporte con contacto que persiste offline y sincroniza (valida esta corrección), lecturas offline, banner/verificación, modo demo. Incluye cómo activar el throttling en Chrome DevTools y qué evidencia capturar.
+
+### Estado del gate de Fase 1 (qué falta)
+
+| Estado | Ítem | Responsable |
+|---|---|---|
+| ✅ | B1, B2 (rules tests + App Check) | Aceptado por el jurado |
+| ✅ | F1, F2, F3 (seguridad de rules, 24/24 tests) | Aceptado por el jurado |
+| ✅ | Repo público asegurado; corrección offline (§19); decisión `creador` (D8); TESTING.md | Agente — **cerrado** |
+| ⏳ | **Testeo móvil 3G** (DoD: carga 3G, <60s, offline+sync) — usar TESTING.md y `/panel?demo=1` | **Lean** |
+| ⛔ | **Handoff §9-4** — operador para la semana 2 | **Lean** (bloquea lanzamiento) |
+| ⛔ | **Reclutar 5–10 coordinadores** (anti cold-start §11) | **Lean** (bloquea lanzamiento) |
+
+**Fase 1b NO arranca** hasta cerrar el gate de Fase 1 con esos tres pendientes de Lean. **El gate NO se da por cerrado por el agente.** Staging sin usuarios reales ni datos de víctimas.
