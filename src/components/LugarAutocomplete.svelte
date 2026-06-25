@@ -1,6 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../lib/i18n.js';
+  import { normaliza, filtrarLocal, photonAGusto, dedupe } from '../lib/autocomplete.js';
 
   // El padre pasa el texto del campo (bind) y recibe eventos:
   //  - 'seleccion' con { nombre, lat, lng, sectorGeo, municipio } al elegir un lugar
@@ -11,85 +12,121 @@
   const dispatch = createEventDispatcher();
 
   let lugares = null;       // cargado de forma diferida
-  let cargando = false;
+  let cargandoDatos = false;
+  let cargandoRemoto = false;
   let sugerencias = [];
   let abierto = false;
   let activo = -1;          // índice resaltado (teclado)
   let buscoVacio = false;
 
-  const COMBINANTES = new RegExp('[\\u0300-\\u036f]', 'g');
-  const norm = (s) =>
-    (s || '').normalize('NFD').replace(COMBINANTES, '').toLowerCase().trim();
+  // --- Photon (fallback remoto) ----------------------------------------
+  // Cuando lo local devuelve <4 sugerencias, consultamos Photon limitado a
+  // Venezuela (gratis, sin API key). Debounce 300 ms + AbortController para no
+  // saturar; cache por sesión para no repetir queries idénticas.
+  const PHOTON_URL = 'https://photon.komoot.io/api';
+  const DEBOUNCE_MS = 300;
+  const UMBRAL_REMOTO = 4;   // si el local trae menos, pedimos a Photon
+  const cachePhoton = new Map();
+  let timerPhoton = null;
+  let abortePhoton = null;
+
+  function cacheGet(q) {
+    if (cachePhoton.has(q)) return cachePhoton.get(q);
+    try {
+      const raw = sessionStorage.getItem('foco_photon:' + q);
+      if (raw) {
+        const v = JSON.parse(raw);
+        cachePhoton.set(q, v);
+        return v;
+      }
+    } catch (_) { /* sessionStorage no disponible */ }
+    return null;
+  }
+  function cacheSet(q, v) {
+    cachePhoton.set(q, v);
+    try { sessionStorage.setItem('foco_photon:' + q, JSON.stringify(v)); } catch (_) { /* ignorar */ }
+  }
+
+  async function consultarPhoton(qOriginal, qNormalizada) {
+    const cached = cacheGet(qNormalizada);
+    if (cached) return cached;
+    // Cancela petición anterior si seguía viva.
+    if (abortePhoton) abortePhoton.abort();
+    abortePhoton = new AbortController();
+    // Photon oficial: NO soporta `bbox` (solo lat/lon + location_bias_scale como
+    // sesgo) NI `lang=es` (solo default/de/en/fr; el `name` nativo de OSM para
+    // Venezuela ya está en español). Sesgamos hacia el centro de Venezuela
+    // (~8°N, -66°W) y filtramos en cliente con dentroDeVenezuela (en photonAGusto).
+    const url = `${PHOTON_URL}/?q=${encodeURIComponent(qOriginal)}&limit=10` +
+      '&lat=8&lon=-66&location_bias_scale=0.6';
+    try {
+      const r = await fetch(url, { signal: abortePhoton.signal });
+      if (!r.ok) throw new Error('http ' + r.status);
+      const j = await r.json();
+      const items = (j.features || []).map(photonAGusto).filter(Boolean);
+      cacheSet(qNormalizada, items);
+      return items;
+    } catch (e) {
+      if (e.name === 'AbortError') return null; // sobreescrito por petición más reciente
+      return []; // cualquier otro fallo → graceful (lo local sigue)
+    }
+  }
+
+  function programarPhoton(qOriginal, qNormalizada, locales) {
+    clearTimeout(timerPhoton);
+    timerPhoton = setTimeout(async () => {
+      // Si la query cambió mientras esperábamos, no procesar (evita races).
+      if (normaliza(valor) !== qNormalizada) return;
+      cargandoRemoto = true;
+      const remotos = await consultarPhoton(qOriginal, qNormalizada);
+      cargandoRemoto = false;
+      if (remotos === null) return;                       // abortado por una más nueva
+      if (normaliza(valor) !== qNormalizada) return;      // el usuario siguió tecleando
+      // Mezcla: locales primero (ya rankeados), luego remotos, dedupe por nombre+municipio.
+      sugerencias = dedupe([...locales, ...remotos]).slice(0, 8);
+      buscoVacio = sugerencias.length === 0;
+    }, DEBOUNCE_MS);
+  }
 
   async function asegurarDatos() {
-    if (lugares || cargando) return;
-    cargando = true;
+    if (lugares || cargandoDatos) return;
+    cargandoDatos = true;
     try {
-      // Import dinámico: lugares.json NO entra al bundle inicial (§6.3).
       const mod = await import('../lib/lugares.json');
       lugares = mod.default || mod;
     } catch (_) {
       lugares = [];
     } finally {
-      cargando = false;
+      cargandoDatos = false;
     }
-  }
-
-  // Ranking del filtro local (§23 Iter 1.2): "fácil + exacto".
-  // Score MENOR = mejor. Prioridades:
-  //   0 = nombre comienza con la query (lo más obvio)
-  //   1 = palabra interna del nombre comienza con la query  ("Plaza Bolívar" para "boli")
-  //   2 = nombre contiene la query
-  //   3 = municipio comienza con la query  ("Caracas" para "carac")
-  //   4 = municipio contiene la query
-  // Empates: nombres más cortos primero (más específico que un nombre largo que matchea).
-  // En vez de regex (frágil con escape), recorremos por palabras del nombre.
-  function empiezaPorPalabra(texto, q) {
-    let i = 0;
-    const L = texto.length;
-    while (i < L) {
-      // skip separadores
-      while (i < L && /[\s\-()/.,]/.test(texto[i])) i++;
-      // ¿la palabra que empieza aquí coincide con q?
-      if (i + q.length <= L && texto.slice(i, i + q.length) === q) return true;
-      // saltar al siguiente separador
-      while (i < L && !/[\s\-()/.,]/.test(texto[i])) i++;
-    }
-    return false;
-  }
-
-  function puntuar(l, q) {
-    const n = norm(l.nombre);
-    const m = norm(l.municipio);
-    if (n.startsWith(q)) return { score: 0, len: n.length };
-    if (empiezaPorPalabra(n, q)) return { score: 1, len: n.length };
-    if (n.includes(q)) return { score: 2, len: n.length };
-    if (m.startsWith(q)) return { score: 3, len: n.length };
-    if (m.includes(q)) return { score: 4, len: n.length };
-    return null;
   }
 
   async function onInput(e) {
     valor = e.target.value;
-    // Escribir invalida el lugar previamente elegido (la persona está cambiando).
     if (elegido) { elegido = null; dispatch('limpiar'); }
     dispatch('texto', valor);
 
-    const q = norm(valor);
-    if (q.length < 2) { sugerencias = []; abierto = false; buscoVacio = false; return; }
+    const q = normaliza(valor);
+    if (q.length < 2) {
+      sugerencias = []; abierto = false; buscoVacio = false;
+      clearTimeout(timerPhoton); if (abortePhoton) abortePhoton.abort();
+      return;
+    }
     await asegurarDatos();
 
-    const matches = [];
-    for (const l of lugares) {
-      const p = puntuar(l, q);
-      if (p) matches.push({ l, ...p });
-    }
-    // Orden por score, luego por longitud del nombre, luego alfabético.
-    matches.sort((a, b) => a.score - b.score || a.len - b.len || a.l.nombre.localeCompare(b.l.nombre));
-    sugerencias = matches.slice(0, 6).map((x) => x.l);
+    // 1) Resultado inmediato del dataset local (no espera red).
+    const locales = filtrarLocal(lugares, q, 6);
+    sugerencias = locales;
     abierto = true;
     activo = -1;
-    buscoVacio = sugerencias.length === 0;
+    buscoVacio = false;
+
+    // 2) Fallback Photon si los locales no bastan (debounced + cache).
+    if (locales.length < UMBRAL_REMOTO) {
+      programarPhoton(valor, q, locales);
+    } else {
+      clearTimeout(timerPhoton);
+    }
   }
 
   function elegir(l) {
@@ -147,12 +184,20 @@
             on:mousedown|preventDefault={() => elegir(l)}
             on:mouseenter={() => (activo = i)}
           >
-            <span class="nom">{l.nombre}</span>
+            <span class="nom">
+              {l.nombre}
+              {#if l._origen === 'photon'}<span class="badge-osm" title="Resultado adicional de OpenStreetMap">+ OSM</span>{/if}
+            </span>
             <span class="sub">{l.tipo} · {l.municipio}</span>
           </li>
         {/each}
+        {#if cargandoRemoto}
+          <li class="estado" aria-live="polite">{$t('reportar.buscando_mas')}</li>
+        {/if}
       </ul>
-    {:else if buscoVacio}
+    {:else if abierto && cargandoRemoto}
+      <p class="vacio" aria-live="polite">{$t('reportar.buscando_mas')}</p>
+    {:else if buscoVacio && !cargandoRemoto}
       <p class="vacio">{$t('reportar.sin_coincidencias')}</p>
     {/if}
   {/if}
@@ -165,7 +210,7 @@
     position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 2px);
     margin: 0; padding: 0; list-style: none; background: #fff;
     border: 1px solid var(--borde); border-radius: var(--radio);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.12); max-height: 280px; overflow: auto;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12); max-height: 320px; overflow: auto;
   }
   .lista li {
     display: flex; flex-direction: column; gap: 2px;
@@ -173,7 +218,12 @@
   }
   .lista li:last-child { border-bottom: none; }
   .lista li.activo { background: #eaf2fb; }
-  .nom { font-weight: 700; }
+  .lista li.estado { cursor: default; color: var(--gris); font-size: 0.82rem; font-style: italic; }
+  .nom { font-weight: 700; display: flex; align-items: center; gap: 0.4rem; }
+  .badge-osm {
+    background: var(--gris-claro); color: var(--gris); font-weight: 700;
+    font-size: 0.68rem; padding: 0.05rem 0.4rem; border-radius: 999px;
+  }
   .sub { font-size: 0.8rem; color: var(--gris); }
   .vacio { color: var(--gris); font-size: 0.85rem; margin: 0.4rem 0 0; }
   .chip-lugar {

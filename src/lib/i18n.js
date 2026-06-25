@@ -73,6 +73,7 @@ const diccionarios = {
     'reportar.lugar_elegido': 'Lugar elegido',
     'reportar.quitar_lugar': 'Quitar lugar elegido',
     'reportar.sin_coincidencias': 'Sin coincidencias. Puedes escribir la referencia a mano.',
+    'reportar.buscando_mas': 'Buscando más lugares en OpenStreetMap…',
     'reportar.usar_gps': 'Usar mi ubicación',
     'reportar.descripcion': 'Detalle breve',
     'reportar.descripcion_aviso': '⚠️ No escribas datos personales (nombres completos, cédula, dirección exacta): la descripción se hace pública al verificarse. Para que te contacten, usa el campo de contacto — ese sí es privado.',
