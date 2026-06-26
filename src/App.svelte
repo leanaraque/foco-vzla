@@ -3,6 +3,7 @@
   import { t } from './lib/i18n.js';
   import { online } from './lib/stores.js';
   import EmergencyBanner from './components/EmergencyBanner.svelte';
+  import Inicio from './routes/Inicio.svelte';
   import Mapa from './routes/Mapa.svelte';
   import Reportar from './routes/Reportar.svelte';
   import Panel from './routes/Panel.svelte';
@@ -52,6 +53,7 @@
   });
 
   const nav = [
+    { p: '/', k: 'nav.inicio' },
     { p: '/mapa', k: 'nav.mapa' },
     { p: '/reportar', k: 'nav.reportar' },
     { p: '/recursos', k: 'nav.recursos' },
@@ -59,14 +61,16 @@
   ];
 
   $: vista =
+    ruta === '/' || ruta === '' ? 'inicio' :
     ruta.startsWith('/reportar') ? 'reportar' :
     ruta.startsWith('/panel') ? 'panel' :
     ruta.startsWith('/recursos') ? 'recursos' :
-    'mapa'; // raíz e desconocido → mapa público (entrada del pivote §22)
+    ruta.startsWith('/mapa') ? 'mapa' :
+    'inicio'; // desconocido → home narrativa (fuente de verdad §25)
 </script>
 
 <header class="cab">
-  <a href="/mapa" class="marca" on:click={(e) => navegar('/mapa', e)}>
+  <a href="/" class="marca" on:click={(e) => navegar('/', e)}>
     <img src="/favicon.svg" alt="" width="34" height="34" />
     <span class="marca-txt">
       <span class="marca-nombre">{$t('app.nombre')}</span>
@@ -82,7 +86,9 @@
 <EmergencyBanner />
 
 <main>
-  {#if vista === 'mapa'}
+  {#if vista === 'inicio'}
+    <Inicio on:ir={(e) => navegar(e.detail)} />
+  {:else if vista === 'mapa'}
     <Mapa />
   {:else if vista === 'reportar'}
     <Reportar />
