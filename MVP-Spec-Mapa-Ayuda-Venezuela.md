@@ -949,3 +949,35 @@ Lean entregó la key real; se puso en **Secret Manager** (`RESEND_API_KEY`) y se
 ### Cobertura del autocompletado — Photon siempre + re-ranking (26 jun)
 
 **Síntoma:** zonas muy conocidas (p.ej. "La Guaira") no sugerían el lugar en sí: el dataset local devolvía varios sub-lugares dentro de la zona (match por municipio) y, al haber ≥4 resultados locales, el fallback Photon **nunca se activaba**. **Fix:** Photon (geocoder gratis con TODO OpenStreetMap) se consulta **siempre** (debounced 280ms + cache, sesgado a Venezuela), y la mezcla local+remoto se **re-rankea por relevancia** (`rankear()` en `autocomplete.js`): un match exacto de nombre va primero venga de donde venga. Resultado (verificado en vivo): "la guaira" → **La Guaira** primero; "san bernardino" → iglesia/colegio/sector San Bernardino (Caracas); "chacao" → Chacao. Cobertura efectivamente ilimitada, costo $0.
+
+---
+
+## 24. Registro de actualizaciones — producción (Fase 2a, 25–26 jun 2026)
+
+> La app ya recibe uso real en `https://focovenezuela.org` (CNAME a Firebase Hosting + Cloudflare). Esta sección consolida los cambios desde el pivote (§22) hasta hoy. Todo verificado en vivo con **Chrome DevTools MCP** y desplegado.
+
+### 24.1 Acceso y dominio
+- **focovenezuela.org no cargaba datos** → faltaba autorizar el dominio en TRES allowlists de Google: reCAPTCHA Enterprise (key), Firebase Auth (authorizedDomains) y referrers de la API key. Corregido los tres. *Lección: al agregar un dominio nuevo, actualizar las tres.* App Check throttlea al cliente 24 h tras un 403 (borrar datos del sitio para recuperar antes).
+
+### 24.2 Ubicación (precisión)
+- **Selector de pin en mapa** (`MapaPin.svelte`, Leaflet diferido) en `/reportar` y `/recursos`, como **camino sugerido** (visible por defecto). Pin SVG propio (evita el icono roto del marcador por defecto de Leaflet). El pin exacto → subdoc **privado** (`geo_exacta`); el mapa público sigue a **nivel sector**. Para **edificios** (sitios públicos de desastre) se usa coord **exacta pública** (decisión del operador).
+- **Autocompletado de ubicación**: dataset OSM (`src/lib/lugares.json`) + **fallback Photon** (geocoder gratis) consultado SIEMPRE y re-rankeado por relevancia. Se añadieron **municipios (admin_level 6) y parroquias (admin_level 7)** de Venezuela por bbox, procesadas con prioridad (zonas conocidas como "San Bernardino" salen primero). Se quitaron `geohash`/`sectorGeo` del JSON (la app los recomputa) → chunk lazy de 143→91 KB gzip con más cobertura.
+
+### 24.3 Marca, mensaje y navegación
+- Marca **"Foco Venezuela"** + eslogan **"La ayuda se organiza entre todos"**.
+- **Banner** reorientado a "plataforma abierta de datos para salvar vidas" (se quitó la sugerencia de líneas oficiales —probablemente saturadas—; se mantiene la guarda §9-2: no es rescate, nadie garantiza acudir).
+- **Footer** con 3 acciones claras: **Sugerencias** (→ Tally `tally.so/r/A70rVk`), **Descargar datos (CSV)** y **Código abierto** (icono GitHub real; antes era un críptico `</>`).
+- **Fix de layout móvil**: el footer pasó a flujo normal (antes `fixed` y los mapas se superponían al footer y al menú). Verificado en 390×844: sin solape.
+
+### 24.4 Datos (export / import / buscador)
+- **Export CSV** (cliente) de necesidades **públicas** (sin contacto ni coords exactas).
+- **Importador reutilizable** `scripts/import-csv.mjs`: carga en bloque CSV → necesidades, con validación de coords, `--dry-run`, `--exacto` vs aproximado-a-sector, y `--tag`/`--clear` para revertir. Columnas flexibles.
+- **Buscador** en la lista del mapa (filtro cliente, insensible a acentos, sobre sector/descripción/categoría/urgencia). El mapa público sube el límite de lectura a 250 para mostrar todas las necesidades.
+
+### 24.5 Carga de datos reales
+- **38 edificios de La Guaira** (CSV del operador) cargados como necesidades `rescate · crítica · Sin verificar`, coord exacta pública, marcadas `creador=IMPORT_LAGUAIRA` (reversible). Validación rigurosa previa: 38/38 coherentes (coords dentro de su parroquia), 0 omitidas. Son **datos NO confirmados** y de ubicación **aproximada** (estimación de escritorio) — la multitud/operador los confirma.
+
+### 24.6 Pendientes / notas del operador
+- **Moderación de datos personales** en descripciones públicas (se observó nombre de víctima en un reporte ciudadano) — control humano del operador antes de verificar (§9-1).
+- El aviso del mapa "ubicación aproximada a nivel de sector" no distingue aún los edificios (exactos) de los reportes ciudadanos (sector); ajuste de copy pendiente.
+- **Gate de Fase 2a** (juez + test 3G de Lean) y **Fase 2b** siguen sin cerrarse/arrancar; el producto opera en producción bajo decisión del operador.
