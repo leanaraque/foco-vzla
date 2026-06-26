@@ -10,6 +10,7 @@
   import BrechaZona from '../components/BrechaZona.svelte';
   import Composicion from '../components/Composicion.svelte';
   import Fuentes from '../components/Fuentes.svelte';
+  import MapaUnificado from '../components/MapaUnificado.svelte';
 
   const ir = createEventDispatcher();
   const navega = (p) => ir('ir', p);
@@ -68,6 +69,15 @@
     if (h < 24) return `${h} h`;
     return `${Math.round(h / 24)} d`;
   }
+
+  // KPI clickeable → abre un mapa filtrado SOLO a los puntos de ese KPI.
+  let kpi = null;
+  function abrirKpi(tipo) {
+    if (tipo === 'rescate') kpi = { t: $t('inicio.pulso_rescate'), def: $t('inicio.def_rescate'), nec: necesidades.filter(esRescateActivo), rec: [] };
+    else if (tipo === 'sinatender') kpi = { t: $t('inicio.pulso_sin_atender'), def: $t('inicio.def_sin_atender'), nec: necesidades.filter((n) => n.estado === 'sin_atender'), rec: [] };
+    else if (tipo === 'recursos') kpi = { t: $t('inicio.pulso_recursos'), def: $t('inicio.def_recursos'), nec: [], rec: recursos };
+    else if (tipo === 'refugios') kpi = { t: $t('inicio.pulso_refugios'), def: $t('inicio.def_refugios'), nec: [], rec: recursos.filter((r) => r.categoria === 'refugio') };
+  }
 </script>
 
 <div class="home">
@@ -114,22 +124,26 @@
   <section class="bloque">
     <h2>{$t('inicio.pulso_titulo')}</h2>
     <div class="pulso">
-      <div class="cifra cifra-roja">
+      <button class="cifra cifra-roja" on:click={() => abrirKpi('rescate')} disabled={cargando}>
         <span class="num">{cargando ? '—' : pulso.rescate}</span>
         <span class="lbl">{$t('inicio.pulso_rescate')}</span>
-      </div>
-      <div class="cifra">
+        <span class="sub">{$t('inicio.sub_rescate')}</span>
+      </button>
+      <button class="cifra" on:click={() => abrirKpi('sinatender')} disabled={cargando}>
         <span class="num">{cargando ? '—' : pulso.sinAtender}</span>
         <span class="lbl">{$t('inicio.pulso_sin_atender')}</span>
-      </div>
-      <div class="cifra cifra-verde">
+        <span class="sub">{$t('inicio.sub_sin_atender')}</span>
+      </button>
+      <button class="cifra cifra-verde" on:click={() => abrirKpi('recursos')} disabled={cargando}>
         <span class="num">{cargando ? '—' : pulso.recursos}</span>
         <span class="lbl">{$t('inicio.pulso_recursos')}</span>
-      </div>
-      <div class="cifra">
+        <span class="sub">{$t('inicio.sub_recursos')}</span>
+      </button>
+      <button class="cifra" on:click={() => abrirKpi('refugios')} disabled={cargando}>
         <span class="num">{cargando ? '—' : pulso.refugios}</span>
         <span class="lbl">{$t('inicio.pulso_refugios')}</span>
-      </div>
+        <span class="sub">{$t('inicio.sub_refugios')}</span>
+      </button>
     </div>
   </section>
 
@@ -142,6 +156,26 @@
   <!-- 6) CONFIANZA — procedencia: de dónde vienen los datos -->
   <Fuentes {necesidades} {recursos} {cargando} />
 </div>
+
+<!-- Detalle de un KPI: mapa filtrado SOLO a sus puntos + qué significa -->
+{#if kpi}
+  <div class="kpi-overlay" on:click={() => (kpi = null)} role="presentation">
+    <div class="kpi-modal" on:click|stopPropagation role="dialog" aria-modal="true">
+      <div class="kpi-head">
+        <div class="kpi-tit">
+          <h2>{kpi.t} <span class="kpi-n">{kpi.nec.length + kpi.rec.length}</span></h2>
+          <p class="kpi-def">{kpi.def}</p>
+        </div>
+        <button class="kpi-x" on:click={() => (kpi = null)} aria-label={$t('inicio.kpi_cerrar')}>✕</button>
+      </div>
+      {#if kpi.nec.length + kpi.rec.length === 0}
+        <p class="kpi-vacio">{$t('inicio.kpi_vacio')}</p>
+      {:else}
+        <MapaUnificado necesidades={kpi.nec} recursos={kpi.rec} alto="56vh" />
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   /* Mobile-first: una columna, todo a un pulgar. */
@@ -186,9 +220,15 @@
   .cifra {
     background: #fff; border: 1px solid var(--borde); border-radius: var(--radio);
     padding: 0.9rem; box-shadow: var(--sombra); display: flex; flex-direction: column; gap: 0.15rem;
+    text-align: left; align-items: flex-start; width: 100%; font: inherit; cursor: pointer;
+    transition: box-shadow 0.15s ease, transform 0.05s ease;
   }
+  .cifra:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); border-color: var(--azul-claro, #cfe3f5); }
+  .cifra:active { transform: translateY(1px); }
+  .cifra[disabled] { cursor: default; opacity: 0.65; }
   .cifra .num { font-size: 1.9rem; font-weight: 800; line-height: 1; }
-  .cifra .lbl { font-size: 0.82rem; color: var(--gris); }
+  .cifra .lbl { font-size: 0.82rem; color: var(--texto); font-weight: 600; }
+  .cifra .sub { font-size: 0.7rem; color: var(--gris); line-height: 1.2; }
   /* Color con propósito (preatentivo): solo lo crítico y lo disponible llevan color. */
   .cifra-roja .num { color: var(--rojo); }
   .cifra-verde .num { color: var(--verde); }
@@ -196,4 +236,23 @@
   @media (min-width: 560px) {
     .pulso { grid-template-columns: repeat(4, 1fr); }
   }
+
+  /* Detalle de un KPI (modal con mapa filtrado) */
+  .kpi-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    display: flex; align-items: flex-end; justify-content: center; z-index: 60;
+  }
+  .kpi-modal {
+    background: #fff; width: 100%; max-width: 760px; border-radius: 16px 16px 0 0;
+    padding: 1rem; max-height: 92vh; overflow: auto;
+  }
+  .kpi-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.8rem; margin-bottom: 0.7rem; }
+  .kpi-tit h2 { font-size: 1.1rem; margin: 0 0 0.25rem; }
+  .kpi-n { color: var(--rojo); font-weight: 800; }
+  .kpi-def { margin: 0; color: var(--gris); font-size: 0.86rem; line-height: 1.4; }
+  .kpi-x {
+    background: var(--gris-claro, #eef1f4); border: none; border-radius: 999px;
+    width: 34px; height: 34px; min-height: 34px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+  }
+  .kpi-vacio { color: var(--gris); padding: 1.5rem 0; text-align: center; }
 </style>
