@@ -1,7 +1,7 @@
 <script>
   import { createEventDispatcher } from 'svelte';
   import { t } from '../lib/i18n.js';
-  import { normaliza, filtrarLocal, photonAGusto, dedupe, marcar } from '../lib/autocomplete.js';
+  import { normaliza, filtrarLocal, photonAGusto, dedupe, rankear, marcar } from '../lib/autocomplete.js';
 
   // El padre pasa el texto del campo (bind) y recibe eventos:
   //  - 'seleccion' con { nombre, lat, lng, sectorGeo, municipio } al elegir un lugar
@@ -25,8 +25,11 @@
   // Venezuela (gratis, sin API key). Debounce 300 ms + AbortController para no
   // saturar; cache por sesión para no repetir queries idénticas.
   const PHOTON_URL = 'https://photon.komoot.io/api';
-  const DEBOUNCE_MS = 300;
-  const UMBRAL_REMOTO = 4;   // si el local trae menos, pedimos a Photon
+  const DEBOUNCE_MS = 280;
+  // Photon se consulta SIEMPRE que haya query (no solo con pocos locales): da la
+  // cobertura completa de OpenStreetMap (cualquier zona/calle de Venezuela) y la
+  // mezcla se re-rankea por relevancia. Sin esto, varios matches locales débiles
+  // (p.ej. lugares dentro de "La Guaira") tapaban el match exacto del geocoder.
   const cachePhoton = new Map();
   let timerPhoton = null;
   let abortePhoton = null;
@@ -83,8 +86,9 @@
       cargandoRemoto = false;
       if (remotos === null) return;                       // abortado por una más nueva
       if (normaliza(valor) !== qNormalizada) return;      // el usuario siguió tecleando
-      // Mezcla: locales primero (ya rankeados), luego remotos, dedupe por nombre+municipio.
-      sugerencias = dedupe([...locales, ...remotos]).slice(0, 8);
+      // Mezcla local + remoto, dedupe por nombre+municipio, y RE-RANKEA por
+      // relevancia: un match exacto de nombre (venga de donde venga) va primero.
+      sugerencias = rankear(dedupe([...locales, ...remotos]), qNormalizada).slice(0, 8);
       buscoVacio = sugerencias.length === 0;
     }, DEBOUNCE_MS);
   }
@@ -117,18 +121,15 @@
     await asegurarDatos();
 
     // 1) Resultado inmediato del dataset local (no espera red).
-    const locales = filtrarLocal(lugares, q, 6);
+    const locales = filtrarLocal(lugares, q, 8);
     sugerencias = locales;
     abierto = true;
     activo = -1;
     buscoVacio = false;
 
-    // 2) Fallback Photon si los locales no bastan (debounced + cache).
-    if (locales.length < UMBRAL_REMOTO) {
-      programarPhoton(valor, q, locales);
-    } else {
-      clearTimeout(timerPhoton);
-    }
+    // 2) Enriquecer SIEMPRE con Photon (cobertura completa de OSM), debounced +
+    //    cache; la mezcla se re-rankea cuando llega.
+    programarPhoton(valor, q, locales);
   }
 
   function elegir(l) {

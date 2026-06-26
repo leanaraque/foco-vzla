@@ -233,6 +233,20 @@ export function marcar(texto, query) {
   return out;
 }
 
+// Re-rankea una mezcla (local + remoto) por relevancia frente a la query, usando
+// la misma puntuación que el filtro local. Así un match exacto de nombre que vino
+// de Photon (p.ej. "La Guaira") queda por ENCIMA de matches locales débiles (que
+// solo coinciden por municipio). Items sin match van al final, no se descartan.
+export function rankear(items, query) {
+  const q = normaliza(query);
+  const conScore = items.map((l) => {
+    const p = puntuar(l, q);
+    return { l, score: p ? p.score : 9, len: p ? p.len : 9999 };
+  });
+  conScore.sort((a, b) => a.score - b.score || a.len - b.len || a.l.nombre.localeCompare(b.l.nombre));
+  return conScore.map((x) => x.l);
+}
+
 // Quita duplicados entre la lista local y la remota usando (nombre+municipio
 // normalizados) como clave. Conserva el primero (local > remoto por el orden
 // con que se pase).
