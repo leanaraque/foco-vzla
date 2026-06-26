@@ -41,8 +41,21 @@
       maxZoom: 19, attribution: '© OpenStreetMap'
     }).addTo(mapa);
 
+    // Pin arrastrable con icono SVG propio (DivIcon): evita el bug del marcador
+    // por defecto de Leaflet con bundlers (PNG que no resuelve → icono roto).
+    // Sin imagen externa → funciona offline y no se rompe.
+    const icono = L.divIcon({
+      className: 'foco-pin',
+      html: '<svg width="34" height="44" viewBox="0 0 34 44" xmlns="http://www.w3.org/2000/svg">' +
+        '<path d="M17 1C8.7 1 2 7.7 2 16c0 11 15 27 15 27s15-16 15-27C32 7.7 25.3 1 17 1z" ' +
+        'fill="#e63946" stroke="#fff" stroke-width="2.5"/>' +
+        '<circle cx="17" cy="16" r="6" fill="#fff"/></svg>',
+      iconSize: [34, 44],
+      iconAnchor: [17, 43]   // la punta del pin apunta a la coordenada
+    });
+
     // Pin arrastrable. Empieza en el centro inicial.
-    marcador = L.marker([ini.lat, ini.lng], { draggable: true, autoPan: true }).addTo(mapa);
+    marcador = L.marker([ini.lat, ini.lng], { draggable: true, autoPan: true, icon: icono }).addTo(mapa);
     marcador.on('dragend', () => {
       const p = marcador.getLatLng();
       colocar(p.lat, p.lng);
@@ -73,7 +86,11 @@
 <style>
   .pin-wrap { position: relative; }
   .mapa-pin {
-    height: 260px; width: 100%; border-radius: var(--radio);
+    height: 300px; width: 100%; border-radius: var(--radio);
     overflow: hidden; border: 1px solid var(--borde);
   }
+  /* DivIcon sin fondo/borde por defecto de Leaflet; sombra suave bajo el pin. */
+  :global(.foco-pin) { background: none; border: none; }
+  :global(.foco-pin svg) { filter: drop-shadow(0 2px 2px rgba(0,0,0,0.35)); cursor: grab; }
+  :global(.foco-pin:active svg) { cursor: grabbing; }
 </style>

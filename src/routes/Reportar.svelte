@@ -18,8 +18,9 @@
   let lng = null;
   let gpsEstado = ''; // '', 'buscando', 'ok', 'error'
 
-  // Selector de pin en mapa (punto exacto calle/edificio).
-  let mostrarMapa = false;
+  // Selector de pin en mapa (punto exacto calle/edificio) — camino SUGERIDO,
+  // visible por defecto para mejorar la exactitud.
+  let mostrarMapa = true;
   let pinLat = null, pinLng = null;     // posición del pin (punto exacto del usuario)
   let centroMapa = null;                // { lat, lng } para recentrar el mapa
 
@@ -137,19 +138,21 @@
       </button>
     </div>
 
-    <!-- Selector de punto exacto (calle/edificio) — opcional, progresivo. -->
-    <div style="margin-top:.5rem">
-      <button type="button" class="btn-bloque" on:click={() => (mostrarMapa = !mostrarMapa)}>
-        {mostrarMapa ? $t('reportar.mapa_ocultar') : $t('reportar.mapa_toggle')}
-        {#if pinLat != null && !mostrarMapa} ✓{/if}
-      </button>
-    </div>
+    <!-- Punto exacto (calle/edificio) — camino SUGERIDO, visible por defecto. -->
     {#if mostrarMapa}
+      <div class="mapa-titulo">{$t('reportar.mapa_titulo')}</div>
       <p class="ayuda">{$t('reportar.mapa_ayuda')}</p>
       <MapaPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} />
       {#if pinLat != null}
-        <p class="ayuda">✓ {$t('reportar.mapa_marcado')}</p>
+        <p class="ayuda pin-ok">✓ {$t('reportar.mapa_marcado')}</p>
       {/if}
+      <button type="button" class="enlace-ocultar" on:click={() => (mostrarMapa = false)}>
+        {$t('reportar.mapa_ocultar')}
+      </button>
+    {:else}
+      <button type="button" class="btn-bloque" style="margin-top:.5rem" on:click={() => (mostrarMapa = true)}>
+        {$t('reportar.mapa_toggle')}{#if pinLat != null} ✓{/if}
+      </button>
     {/if}
 
     <label for="desc">{$t('reportar.descripcion')}</label>
@@ -167,3 +170,12 @@
     </button>
   {/if}
 </div>
+
+<style>
+  .mapa-titulo { font-weight: 700; margin: 0.9rem 0 0.2rem; }
+  .pin-ok { color: var(--verde); font-weight: 600; }
+  .enlace-ocultar {
+    background: none; border: none; min-height: 0; padding: 0.35rem 0;
+    color: var(--gris); text-decoration: underline; font-size: 0.85rem;
+  }
+</style>
