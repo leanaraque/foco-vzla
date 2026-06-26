@@ -3,16 +3,21 @@
 #  - apiKey web de Firebase (va en el bundle del navegador; la seguridad la dan
 #    las security rules + App Check, no esta key). Está restringida por referrer.
 #  - site key de reCAPTCHA Enterprise (pública por definición).
+#  - keys "publishable/anon" de Supabase de TERCEROS (terremotovenezuela.com,
+#    ayudavenezuela.app): son la clave anónima de solo-lectura de sus APIs
+#    públicas, pública por diseño (prefijo sb_publishable_). No es un secreto
+#    nuestro; la usan los extractores de scripts/ para leer datos abiertos.
 # Cualquier OTRO secreto (service account, .env, claves privadas) debe fallar.
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Valores públicos por diseño (Firebase web config + reCAPTCHA site key)"
+description = "Valores públicos por diseño (Firebase web config + reCAPTCHA site key + Supabase publishable de terceros)"
 regexes = [
   '''AIzaSyD_nbgZoZ-ymxSmcy9GEC_PniFTZxUrbQ8''',
   '''6LfQ2zMtAAAAAEQgln84biLpIQ7HodgCK6pXL3MH''',
+  '''sb_publishable_[A-Za-z0-9_]+''',
 ]
 paths = [
   '''\.env\.example''',
