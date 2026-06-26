@@ -3,6 +3,7 @@
   import { online, asegurarSesionAnonima } from '../lib/stores.js';
   import { crearNecesidad } from '../lib/db.js';
   import LugarAutocomplete from '../components/LugarAutocomplete.svelte';
+  import MapaPin from '../components/MapaPin.svelte';
 
   const categorias = ['rescate', 'medico', 'agua', 'alimento', 'refugio', 'otro'];
   const urgencias = ['critica', 'alta', 'media'];
@@ -17,6 +18,11 @@
   let lng = null;
   let gpsEstado = ''; // '', 'buscando', 'ok', 'error'
 
+  // Selector de pin en mapa (punto exacto calle/edificio).
+  let mostrarMapa = false;
+  let pinLat = null, pinLng = null;     // posición del pin (punto exacto del usuario)
+  let centroMapa = null;                // { lat, lng } para recentrar el mapa
+
   let enviando = false;
   let resultado = ''; // '', 'ok', 'ok_offline'
   let error = '';
@@ -29,27 +35,41 @@
         lat = pos.coords.latitude;
         lng = pos.coords.longitude;
         gpsEstado = 'ok';
+        // El GPS recentra/posiciona el pin del mapa también.
+        centroMapa = { lat, lng };
+        mostrarMapa = true;
       },
       () => { gpsEstado = 'error'; },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
     );
   }
 
+  // Al elegir un lugar del autocompletado, centra el mapa ahí para afinar el pin.
+  function onLugar(e) {
+    const l = e.detail;
+    if (l && Number.isFinite(l.lat)) centroMapa = { lat: l.lat, lng: l.lng };
+  }
+
   async function enviar() {
     error = '';
     if (!categoria) { error = $t('reportar.categoria'); return; }
-    if (!sector && !referencia && !(lat && lng)) { error = $t('reportar.falta_ubicacion'); return; }
+    const hayPin = pinLat != null && pinLng != null;
+    if (!sector && !referencia && !(lat && lng) && !hayPin) { error = $t('reportar.falta_ubicacion'); return; }
 
     enviando = true;
     try {
       await asegurarSesionAnonima();
-      // GPS = preciso (→ privado). referencia = lugar elegido (→ zona pública correcta
-      // sin GPS). Si solo hay texto libre, la capa de datos usa el centro de zona (§22.11).
+      // Punto EXACTO (→ privado, geo_exacta): el pin del mapa si el usuario lo marcó,
+      // o el GPS. Es lo más preciso que el coordinador necesita para llegar.
+      // referencia = lugar elegido (→ zona pública correcta). El mapa público siempre
+      // muestra a nivel sector (§9-1, §22.11).
+      const exacto = hayPin ? { lat: pinLat, lng: pinLng }
+                   : (lat != null && lng != null ? { lat, lng } : null);
       const { listo } = crearNecesidad({
         categoria, urgencia,
         sector: sector || (referencia ? referencia.nombre : '(sin sector — ver mapa)'),
         descripcion,
-        gps: lat != null && lng != null ? { lat, lng } : null,
+        gps: exacto,
         referencia,
         contacto: contacto.trim()
       });
@@ -71,6 +91,7 @@
   function reset() {
     categoria = ''; urgencia = 'alta'; sector = ''; referencia = null; descripcion = '';
     contacto = ''; lat = null; lng = null; gpsEstado = ''; resultado = ''; error = '';
+    mostrarMapa = false; pinLat = null; pinLng = null; centroMapa = null;
   }
 </script>
 
@@ -106,7 +127,7 @@
     <LugarAutocomplete
       bind:valor={sector}
       bind:elegido={referencia}
-      on:seleccion={() => { /* coords vienen de la referencia; no tocamos el GPS */ }}
+      on:seleccion={onLugar}
     />
     <p class="ayuda">{$t('reportar.ubicacion_ayuda')}</p>
     <div style="margin-top:.5rem">
@@ -115,6 +136,21 @@
         {#if gpsEstado === 'buscando'}…{:else if gpsEstado === 'ok'}✓{:else if gpsEstado === 'error'}⚠{/if}
       </button>
     </div>
+
+    <!-- Selector de punto exacto (calle/edificio) — opcional, progresivo. -->
+    <div style="margin-top:.5rem">
+      <button type="button" class="btn-bloque" on:click={() => (mostrarMapa = !mostrarMapa)}>
+        {mostrarMapa ? $t('reportar.mapa_ocultar') : $t('reportar.mapa_toggle')}
+        {#if pinLat != null && !mostrarMapa} ✓{/if}
+      </button>
+    </div>
+    {#if mostrarMapa}
+      <p class="ayuda">{$t('reportar.mapa_ayuda')}</p>
+      <MapaPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} />
+      {#if pinLat != null}
+        <p class="ayuda">✓ {$t('reportar.mapa_marcado')}</p>
+      {/if}
+    {/if}
 
     <label for="desc">{$t('reportar.descripcion')}</label>
     <textarea id="desc" bind:value={descripcion} maxlength="500"
