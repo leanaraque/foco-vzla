@@ -173,6 +173,33 @@ export async function leerNecesidadesPublicas({ forzarServidor = false, demo = f
   return { items: snap.docs.map((d) => ({ id: d.id, ...d.data() })), origen: 'servidor' };
 }
 
+// Export CSV de datos PÚBLICOS (§23): cualquiera puede descargar las necesidades
+// públicas. NUNCA exporta contacto ni coordenadas exactas (viven en el subdoc
+// privado, fuera de esta lectura). Lectura puntual acotada (no listener) para
+// controlar el costo (§6.2-r1).
+function csvCell(v) {
+  const s = v == null ? '' : String(v);
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
+export async function exportarNecesidadesCsv({ limite = 2000 } = {}) {
+  const q = query(collection(db, 'necesidades'), orderBy('creada_en', 'desc'), limit(limite));
+  const snap = await getDocs(q);
+  const cols = ['id', 'categoria', 'urgencia', 'sector', 'descripcion', 'estado',
+    'verificacion', 'confirmaciones', 'lat_sector', 'lng_sector', 'creada_en'];
+  const filas = [cols.join(',')];
+  for (const d of snap.docs) {
+    const n = d.data();
+    const fecha = n.creada_en?.toDate ? n.creada_en.toDate().toISOString() : '';
+    filas.push([
+      d.id, n.categoria, n.urgencia, n.sector, n.descripcion, n.estado,
+      n.verificacion, n.confirmaciones || 0,
+      n.geo?.lat ?? '', n.geo?.lng ?? '', fecha
+    ].map(csvCell).join(','));
+  }
+  return { csv: filas.join('\r\n'), n: snap.size };
+}
+
 // Confirmación ciudadana (§22.5): el usuario crea SU confirmación (id == su uid).
 // Una sola vez por uid (lo enforcan las rules). El contador y la transición de
 // estado los hace la Cloud Function; aquí solo se registra el voto.

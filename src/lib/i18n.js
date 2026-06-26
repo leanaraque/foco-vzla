@@ -5,12 +5,20 @@ import { writable, derived } from 'svelte/store';
 
 const diccionarios = {
   es: {
-    'app.nombre': 'FOCO',
+    'app.nombre': 'Foco Venezuela',
+    'app.slogan': 'La ayuda se organiza entre todos',
     'app.tagline': 'Ayuda mutua entre vecinos',
 
     // Reencuadre §9-2 / §22.7-1: ayuda mutua, NO rescate; nadie garantiza acudir.
-    'banner.aviso': 'FOCO es ayuda mutua entre vecinos, no un servicio de rescate: nadie garantiza que alguien acuda. Ante peligro inmediato, contacta a las líneas oficiales.',
-    'banner.oficiales': 'Líneas oficiales',
+    // Las líneas oficiales (probablemente saturadas) se reemplazan por el mensaje
+    // de ayuda mutua (decisión del operador, §23).
+    'banner.aviso': 'Es ayuda mutua entre vecinos, no un servicio de rescate: nadie garantiza que alguien acuda. Ante peligro inmediato, busca a vecinos cercanos y coordínense aquí.',
+
+    'footer.sugerencias': '💡 Sugerencias',
+    'footer.csv': '⬇️ Descargar datos (CSV)',
+    'footer.csv_cargando': 'Preparando…',
+    'footer.repo': 'Código abierto',
+    'footer.repo_desc': 'Este proyecto es de código abierto. Míralo o despliega el tuyo.',
 
     'nav.mapa': 'Mapa',
     'nav.reportar': 'Reportar',
