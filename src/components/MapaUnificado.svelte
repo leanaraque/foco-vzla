@@ -13,7 +13,8 @@
   export let alto = '62vh';
 
   const dispatch = createEventDispatcher();
-  const colorUrg = { critica: '#e63946', alta: '#d97706', media: '#1666a0' };
+  // Escala de peligro intuitiva: rojo (crítica) → naranja (alta) → amarillo (media).
+  const colorUrg = { critica: '#e63946', alta: '#d97706', media: '#eab308' };
   const VERDE = '#2a9d54';
   const DEFAULT = { lat: 10.5, lng: -66.91, zoom: conPin ? 12 : 9 };
 
