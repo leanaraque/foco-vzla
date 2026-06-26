@@ -260,6 +260,14 @@ service cloud.firestore {
     match /_demo_necesidades/{id} { allow read: if true; allow write: if false; }
     match /_demo_recursos/{id}    { allow read: if true; allow write: if false; }
 
+    // === COLA DE REVISIÓN DE FUSIONES (curador §25.8) =====================
+    // Pares de posibles duplicados que el curador NO auto-fusionó (confianza media);
+    // los revisa un coordinador. Escritura solo por la Cloud Function (Admin SDK).
+    match /_revision_merges/{id} {
+      allow read: if isCoord();
+      allow write: if false;
+    }
+
     // === Cierre por defecto: todo lo no declarado, denegado ================
     match /{document=**} {
       allow read, write: if false;

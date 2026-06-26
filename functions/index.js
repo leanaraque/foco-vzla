@@ -147,3 +147,8 @@ export const marcarAislados = onSchedule(
     logger.info(`marcarAislados: ${n} necesidades → pendiente_revision`);
   }
 );
+
+// === Curador agendado (§25.8): mantiene `necesidades` como fuente de verdad viva
+// (enriquece, recalcula prioridad con frescura, deduplica conservador + cola de
+// revisión). Vive en su propio módulo por tamaño.
+export { curador } from './curador.js';
