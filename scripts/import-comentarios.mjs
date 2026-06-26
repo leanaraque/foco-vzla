@@ -88,15 +88,23 @@ function detectarEdificio(t) {
   for (const [k, v] of CANON) if (t.includes(k)) return v;
   // 2) patrón "edificio|residencia(s)|res|conjunto|urb|hotel|torre <Nombre>"
   const m = /(?:edificio|edif|residencias?|res|conjunto|urb(?:anizacion)?|hotel|torre|recidencias?)\s+([a-z0-9ñ]+(?:\s+[a-z0-9ñ]+){0,2})/.exec(t);
-  if (m) { const cand = m[1].replace(/\b(de|la|el|los|en|por|favor|playa|grande|catia|mar|del)\b/g, '').trim(); if (cand.length >= 3) return cand.split(' ').map(w => w[0].toUpperCase() + w.slice(1)).join(' '); }
+  if (m) { const cand = m[1].replace(/\b(de|la|el|los|en|por|favor|playa|grande|catia|mar|del)\b/g, ' ').replace(/\s+/g, ' ').trim(); const ws = cand.split(' ').filter(Boolean); if (ws.join('').length >= 3) return ws.map(w => w[0].toUpperCase() + w.slice(1)).join(' '); }
   return null;
 }
 
 // ---- Parseo del archivo en comentarios ----
 const raw = readFileSync(file, 'utf8');
-// Separa por las líneas de metadatos de IG (tiempo + Me gusta/Responder).
-const comentarios = raw.split(/\n?\s*\d+\s*(?:h|min|s)\d*\s*(?:Me gusta)?Responder|\nResponder|Foto disponible en la aplicacion/i)
-  .map(c => c.replace(/\s+/g, ' ').trim()).filter(c => c.length > 3);
+let comentarios;
+if (file.toLowerCase().endsWith('.json')) {
+  // Export estructurado: array de { text } (o strings). Usa el texto del comentario.
+  const arr = JSON.parse(raw);
+  comentarios = (Array.isArray(arr) ? arr : []).map(x => typeof x === 'string' ? x : (x && x.text) || '')
+    .map(c => c.replace(/\s+/g, ' ').trim()).filter(c => c.length > 3);
+} else {
+  // Texto pegado: separa por las líneas de metadatos de IG (tiempo + Me gusta/Responder).
+  comentarios = raw.split(/\n?\s*\d+\s*(?:h|min|s)\d*\s*(?:Me gusta)?Responder|\nResponder|Foto disponible en la aplicacion/i)
+    .map(c => c.replace(/\s+/g, ' ').trim()).filter(c => c.length > 3);
+}
 
 const mapa = new Map(); // canónico → agregado
 let conPII = 0, ruido = 0, sinEdificio = 0;
@@ -144,29 +152,57 @@ const S = v => ({ stringValue: String(v) }); const N = v => ({ integerValue: Str
 const require2 = (await import('node:module')).createRequire(import.meta.url);
 const { geohashForLocation } = require2('geofire-common');
 
-let ok = 0;
+// Traer existentes para EMPAREJAR por nombre (enriquecer en vez de duplicar).
+async function pageAll(col) { const o = []; let p; do { const j = await fetch(`${BASE}/${col}?pageSize=300${p ? '&pageToken=' + p : ''}`, { headers: H() }).then(r => r.json()); p = j.nextPageToken; for (const d of j.documents || []) o.push({ id: d.name.split('/').pop(), f: d.fields || {} }); } while (p); return o; }
+const existentes = await pageAll('necesidades');
+// Clave de emparejamiento: nombre SIN prefijo de tipo (así "Orca" == "Residencias Orca").
+const clave = s => norm(s).replace(/^(residencias?|recidencias?|edificios?|edif|res|conjunto residencial|conjunto|urb(?:anizacion)?|hotel|torre)\s+/, '');
+const idx = new Map();
+for (const d of existentes) { if (d.f.duplicado_de) continue; const k = clave((d.f.sector?.stringValue || '').split('·')[0]); if (k && !idx.has(k)) idx.set(k, d); }
+const CANON_SET = new Set([...CANON.values()].map(clave));
+// Calidad: importa solo lo relevante (ya existe, conocido, o >=2 menciones) — corta la cola de basura.
+const relevante = a => idx.has(clave(a.nombre)) || CANON_SET.has(clave(a.nombre)) || a.menciones >= 2;
+
+const sitDe = a => [a.con_vida && 'señales de vida', a.atrapados && 'personas atrapadas', a.sin_ayuda && 'sin ayuda aún', a.maquinaria && 'necesita maquinaria'].filter(Boolean).join(' · ');
+let creados = 0, enriquecidos = 0, omitidos = 0;
 for (const a of lista) {
-  const [lat, lng] = SECTORES[a.sector] || SECTORES[SECTOR_DEFECTO];
-  const gh = geohashForLocation([lat, lng]);
-  // Descripción PÚBLICA sin PII: solo situación + nº de reportes ciudadanos.
-  const sit = [a.con_vida && 'señales de vida', a.atrapados && 'personas atrapadas', a.sin_ayuda && 'sin ayuda aún', a.maquinaria && 'necesita maquinaria'].filter(Boolean).join(' · ');
-  const desc = `Reportes ciudadanos (${a.menciones}): ${sit || 'reporte de afectación'}. Fuente: comentarios ${FUENTE}.`;
-  const fields = {
-    categoria: S('rescate'), urgencia: S(a.con_vida || a.atrapados ? 'critica' : 'alta'),
-    severidad: S('total'), rescate_activo: B(a.con_vida || a.atrapados),
-    rescate: { mapValue: { fields: { atrapados: B(a.atrapados), con_vida: B(a.con_vida) } } },
-    para_quien: S('vecino'), personas_rango: S('2-5'),
-    prioridad: N(Math.min(100, 60 + (a.con_vida ? 25 : 0) + Math.min(15, a.menciones))),
-    fuente: S('whatsapp'), estado: S('sin_atender'), verificacion: S('no_verificada'), reclamada_por: { nullValue: null },
-    creador: S(FUENTE), confirmaciones: N(0),
-    sector: S(`${a.nombre} · ${a.sector}`.slice(0, 140)), descripcion: S(desc),
-    geo: { mapValue: { fields: { lat: D(lat), lng: D(lng), geohash: S(gh) } } }, sectorGeo: S(gh.slice(0, 5)),
-    precision: S('sector'),
-    vigencia: { mapValue: { fields: { ultima_confirmacion_en: TS(), confirmaciones_vigencia: N(0) } } },
-    creada_en: TS(), actualizada_en: TS()
-  };
-  const r = await fetch(`${BASE}/necesidades`, { method: 'POST', headers: H(), body: JSON.stringify({ fields }) });
-  if (r.ok) ok++; else console.log('✗', a.nombre, r.status, (await r.text()).slice(0, 100));
+  if (!relevante(a)) { omitidos++; continue; }
+  const sit = sitDe(a);
+  const prio = Math.min(100, 60 + (a.con_vida ? 25 : 0) + Math.min(15, a.menciones));
+  const ex = idx.get(clave(a.nombre));
+  if (ex) {
+    // ENRIQUECER el existente con la señal viva (sin PII, sin pisar lo demás).
+    const descPrev = ex.f.descripcion?.stringValue || '';
+    const fields = {
+      rescate_activo: B(a.con_vida || a.atrapados),
+      rescate: { mapValue: { fields: { atrapados: B(a.atrapados), con_vida: B(a.con_vida) } } },
+      urgencia: S(a.con_vida || a.atrapados ? 'critica' : (ex.f.urgencia?.stringValue || 'alta')),
+      prioridad: N(prio), reportes_ciudadanos: N(a.menciones),
+      descripcion: S(`${descPrev} · Ciudadanos (${a.menciones}): ${sit || 'reporte'}`.slice(0, 500)),
+      actualizada_en: TS()
+    };
+    const mask = ['rescate_activo', 'rescate', 'urgencia', 'prioridad', 'reportes_ciudadanos', 'descripcion', 'actualizada_en'].map(m => `updateMask.fieldPaths=${m}`).join('&');
+    const r = await fetch(`${BASE}/necesidades/${ex.id}?${mask}`, { method: 'PATCH', headers: H(), body: JSON.stringify({ fields }) });
+    if (r.ok) enriquecidos++; else console.log('✗ enriquecer', a.nombre, r.status);
+  } else {
+    const [lat, lng] = SECTORES[a.sector] || SECTORES[SECTOR_DEFECTO];
+    const gh = geohashForLocation([lat, lng]);
+    const fields = {
+      categoria: S('rescate'), urgencia: S(a.con_vida || a.atrapados ? 'critica' : 'alta'),
+      severidad: S('total'), rescate_activo: B(a.con_vida || a.atrapados),
+      rescate: { mapValue: { fields: { atrapados: B(a.atrapados), con_vida: B(a.con_vida) } } },
+      para_quien: S('vecino'), personas_rango: S('2-5'), prioridad: N(prio), reportes_ciudadanos: N(a.menciones),
+      fuente: S('whatsapp'), estado: S('sin_atender'), verificacion: S('no_verificada'), reclamada_por: { nullValue: null },
+      creador: S(FUENTE), confirmaciones: N(0),
+      sector: S(`${a.nombre} · ${a.sector}`.slice(0, 140)),
+      descripcion: S(`Reportes ciudadanos (${a.menciones}): ${sit || 'reporte de afectación'}. Fuente: ${FUENTE}.`),
+      geo: { mapValue: { fields: { lat: D(lat), lng: D(lng), geohash: S(gh) } } }, sectorGeo: S(gh.slice(0, 5)),
+      precision: S('sector'), vigencia: { mapValue: { fields: { ultima_confirmacion_en: TS(), confirmaciones_vigencia: N(0) } } },
+      creada_en: TS(), actualizada_en: TS()
+    };
+    const r = await fetch(`${BASE}/necesidades`, { method: 'POST', headers: H(), body: JSON.stringify({ fields }) });
+    if (r.ok) creados++; else console.log('✗ crear', a.nombre, r.status, (await r.text()).slice(0, 80));
+  }
 }
-console.log(`\n✅ Importados ${ok}/${lista.length} edificios (tag=${FUENTE}, nivel sector). El curador los deduplicará contra los existentes.`);
-console.log(`Revertir: usar import-csv.mjs --clear=${FUENTE} (mismo patrón de tag).`);
+console.log(`\n✅ Enriquecidos ${enriquecidos} existentes | creados ${creados} nuevos | omitidos ${omitidos} (baja confianza). tag=${FUENTE}. El curador afina el dedup.`);
+console.log(`Revertir nuevos: node scripts/import-csv.mjs --clear=${FUENTE}`);
