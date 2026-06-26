@@ -162,7 +162,7 @@
   /* Clústers (contador) */
   :global(.cl-wrap) { background: none; }
   :global(.cl) { display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 800; font-size: 0.82rem; border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,0.4); }
-  :global(.cl-nec) { background: #1666a0; }
+  :global(.cl-nec) { background: #d97706; }
   :global(.cl-rec) { background: #2a9d54; }
   :global(.cl-sos) { background: #e63946; }
   .leyenda i.sos-i { box-shadow: 0 0 0 1px rgba(0,0,0,0.15), 0 0 4px rgba(230,57,70,0.6); }
