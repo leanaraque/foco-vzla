@@ -984,3 +984,75 @@ Lean entregó la key real; se puso en **Secret Manager** (`RESEND_API_KEY`) y se
 
 ### 24.7 Mapa unificado (26 jun)
 Un único componente `MapaUnificado.svelte` reemplaza a `MapView` y `MapaPin`: el **mismo mapa** en `/mapa`, `/reportar`, `/recursos` y `/panel`. Muestra **necesidades** (color por urgencia) y **recursos** (verde) como marcadores, con leyenda; en modo reporte añade el **pin arrastrable** sobre el mismo mapa con los datos existentes como contexto. El footer pasó a links discretos (antes pills que se veían pesadas sobre el mapa). Los CSVs fuente del operador no se versionan (repo público).
+
+---
+
+## 25. Modelo de datos como FUENTE DE VERDAD — núcleo del producto (26 jun 2026)
+
+> Decisión estratégica del operador (Lean): el aporte central de FOCO es **organizar los datos para que sean ÚTILES y confiables como fuente de verdad** — para quien necesita ayuda y para quien la presta. Una limpieza de una sola vez no basta: la reconciliación debe ser **recurrente**. Esta sección es el **contrato**: todo lo que se construya (formulario, rules, ingesta, curador) se ajusta a esto.
+
+### 25.1 Seis propiedades de "fuente de verdad"
+Procedencia · Verificación · **Frescura** · **Resolución** · Unicidad · **Estructura**. El `/reportar` previo cubría procedencia y verificación; este rediseño añade las otras cuatro.
+
+### 25.2 Decisiones de diseño (gate, 26 jun)
+1. Taxonomía: clasificar por **severidad** + flag `rescate_activo` + detalle (NO recategorizar todo como rescate).
+2. Precisión geográfica pública: **exacta + flag** para edificios; personas siempre a nivel sector.
+3. Construcción canónica: **re-ingesta limpia a staging** (no curar in-place a ciegas).
+4. `/reportar`: **mínimo de 5 campos a toques**; resto condicional/opcional (revelación progresiva).
+5. **Tipar** los datos: sacar lo estructurado de la descripción libre (menos PII, máquina-usable).
+6. Prioridad **derivada por el sistema** (la urgencia auto-declarada deja de ser el eje).
+
+### 25.3 Esquema canónico `necesidades` (campos ASCII)
+```
+PROCEDENCIA:  creador · fuentes[]={sistema,id_externo,capturado_en,url}
+CLASIFICACIÓN: categoria ∈ rescate|medico|agua|alimento|refugio|servicios|otro
+QUIÉN/CUÁNTOS: para_quien ∈ yo|familiar|vecino|desconocido · personas={rango:'1'|'2-5'|'6-20'|'+20'}
+              vulnerables[] ⊆ ninos|mayores|discapacidad|embarazadas|heridos|cronicos
+RESCATE (cond): rescate={atrapados:bool,cantidad?,con_vida?:bool,desde?:'<6h'|'6-24h'|'+24h'} · rescate_activo:bool(derivado)
+MÉDICO (cond):  medico={tipo?:herido|medicamento_critico|atencion, medicamento?:insulina|oxigeno|dialisis|otro}
+CANTIDAD (cond): cantidad={personas?,dias?}   (agua/alimento/refugio)
+RIESGOS (opc):  riesgos[] ⊆ gas|fuego|colapso|electricidad|agua
+SEVERIDAD/PRIO: severidad ∈ total|severo|parcial|desconocida · prioridad:0-100(derivada) · urgencia_reportada(insumo)
+UBICACIÓN:      estado·municipio·parroquia·sector · geo{lat,lng,geohash} · sectorGeo · precision ∈ exacta|sector
+ESTADO OP:      estado ∈ sin_atender|asignada|en_camino|en_sitio|resuelta|cerrada_invalida · asignada_a={grupo?,uid?}
+CONFIANZA:      verificacion ∈ no_verificada|confirmada|pendiente_revision|verificada · confianza:0-100 · confirmaciones
+FRESCURA:       vigencia={ultima_confirmacion_en, confirmaciones_vigencia}  (decaimiento del curador)
+RESOLUCIÓN:     desenlace?={resultado:persona_a_salvo|recurso_entregado|no_ubicado|falso|otro, nota?, cerrado_por, cerrado_en}
+CONTENIDO:      descripcion (breve, opcional, SIN PII) · creada_en · actualizada_en · last_seen_en
+PRIVADO/datos (solo coordinador): contacto · contacto_alterno? · geo_exacta · como_llegar?
+```
+
+### 25.4 Esquema canónico `recursos`
+```
+fuentes[] · categoria ∈ medico|refugio|agua|alimento|transporte|acopio|otro · nombre(saneado)
+estado·municipio·parroquia·sector · geo · precision · disponible:bool · capacidad? · necesita[]?
+confianza · creada_en · last_seen_en   |  privado/datos: { contacto }
+```
+
+### 25.5 Motor de prioridad (derivada) → `src/lib/prioridad.js`
+Función pura, testeable. `prioridad ∈ [0,100]` = f(atrapados+con_vida, médico crítico, severidad, vulnerables, nº personas, frescura/decaimiento, insumo del usuario como desempate menor). Bandas: critica≥60 · alta≥35 · media≥15 · baja. **Calibrable por el operador.** Reemplaza la urgencia auto-declarada como eje del mapa (color/orden por prioridad).
+
+### 25.6 Frescura + ciclo de vida + cierre
+- **Estados**: sin_atender → asignada → en_camino → en_sitio → resuelta | cerrada_invalida.
+- **Frescura**: acción "¿sigue vigente?" (reportante/multitud) actualiza `vigencia`; el curador **decae** la prioridad de lo viejo no reconfirmado y manda a `pendiente_revision` (no borra; `marcarAislados` evoluciona a esto).
+- **Cierre de ciclo**: al resolver se captura `desenlace` (¿persona a salvo? ¿recurso entregado?) — libera recursos y audita la verdad.
+
+### 25.7 `/reportar` — campos (revelación progresiva)
+- **Requerido (≈30s, a toques):** categoria · ubicacion · para_quien · personas.rango · contacto(privado).
+- **Condicional por categoría:** rescate→{atrapados,cantidad,con_vida,desde} · medico→{tipo,medicamento} · agua/alimento/refugio→cantidad.
+- **Opcional valioso (chips):** vulnerables · riesgos · como_llegar(privado) · contacto_alterno(privado).
+- **Derivado (no lo pide el usuario):** prioridad · severidad · rescate_activo · confianza · geohash · provenance.
+- `descripcion` pasa a **contexto breve opcional**.
+
+### 25.8 Pipeline recurrente (curador) — la reconciliación viva
+- **`/reportar` NO cambia su camino** (offline-first y reporte <60s intactos): escribe a `necesidades`.
+- **Ingesta masiva** (APIs) → `_ingesta_*` (staging) → curador.
+- **Curador agendado** (Cloud Function timer, como `marcarAislados`), **idempotente**: deduplica (auto **solo alta confianza**; lo dudoso → **cola de revisión del coordinador**), normaliza vocabularios, recalcula prioridad/confianza/vigencia. **Línea roja:** nunca fusiona de más un reporte humano ni lo sepulta bajo un lote masivo (ciudadano > confirmado-multitud > lote masivo). Reversible (provenance + backup).
+
+### 25.9 Privacidad con el nuevo set
+- **Público:** categoria, severidad, prioridad, personas.rango, vulnerables (agregado sí/no), sector, precision.
+- **Privado (solo coordinador):** contacto, contacto_alterno, geo_exacta, como_llegar.
+- Descripción pública = contexto, sin PII (los datos sensibles ahora tienen su campo tipado y privado).
+
+### 25.10 Secuencia de construcción
+1. **Motor de prioridad** (puro + tests) ← primer ladrillo. 2. `/reportar` nuevo + `payload`/`crearNecesidad`. 3. **rules** nuevas (`validNuevaNecesidad` del esquema nuevo). 4. Lecturas de la app (color/orden por prioridad; badges severidad/rescate_activo/precision). 5. **Curador** (Cloud Function) + **re-ingesta** (backfill Opción 1, recupera severidad faltante y contactos de recursos). 6. Migración del histórico al esquema nuevo + mantener limpio con el curador agendado.
