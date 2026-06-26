@@ -99,7 +99,8 @@ const C = {
   ref: col('referencia', 'direccion', 'dirección'), lat: col('lat', 'latitud'),
   lng: col('lng', 'lon', 'longitud'), urg: col('urgencia'),
   estado: col('estado', 'verificacion', 'verificación'), cat: col('categoria', 'categoría'),
-  notas: col('notas', 'notes', 'descripcion', 'descripción')
+  notas: col('notas', 'notes', 'descripcion', 'descripción'),
+  contacto: col('contacto', 'telefono', 'teléfono')
 };
 const get = (f, i) => (i >= 0 ? (f[i] || '').trim() : '');
 
@@ -155,12 +156,15 @@ for (const { f, nombre, lat, lng } of validas) {
   if (!res.ok) { err++; console.log('✗', sector, res.status, (await res.text()).slice(0, 100)); continue; }
   ok++;
 
-  // Modelo privacidad: si NO es exacto, la coord exacta va al subdoc privado.
-  if (!opt.exacto) {
+  // Modelo privacidad (§9-1): el contacto y/o la coord exacta van al subdoc privado
+  // (solo coordinador). Se crea si hay contacto en la fila o si la coord no es pública.
+  const contacto = get(f, C.contacto);
+  if (contacto || !opt.exacto) {
     const id = (await res.json()).name.split('/').pop();
+    const priv = { creador: S(TAG), contacto: S(contacto || '') };
+    if (!opt.exacto) priv.geo_exacta = { mapValue: { fields: { lat: D(lat), lng: D(lng) } } };
     await fetch(`${BASE}/necesidades/${id}/privado/datos`, {
-      method: 'POST', headers: headers(),
-      body: JSON.stringify({ fields: { creador: S(TAG), contacto: S(''), geo_exacta: { mapValue: { fields: { lat: D(lat), lng: D(lng) } } } } })
+      method: 'POST', headers: headers(), body: JSON.stringify({ fields: priv })
     }).catch(() => {});
   }
 }
