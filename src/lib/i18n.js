@@ -64,6 +64,9 @@ const diccionarios = {
     'comp.vacio': 'Aún no hay datos suficientes para mostrar la composición.',
     'inicio.confianza_titulo': 'De dónde vienen estos datos',
     'inicio.confianza_txt': 'Reunimos reportes ciudadanos y datos abiertos de varias plataformas de la emergencia. La información se actualiza y verifica de forma continua; las cifras pueden cambiar a medida que se confirma cada caso.',
+    'fuentes.lede': 'Estos son los orígenes de la información reunida hasta ahora.',
+    'fuentes.total': 'registros en total',
+    'fuentes.ciudadanos': 'Reportes ciudadanos',
 
     // Microcopy: una línea por segmento (§22.7-6)
     'intro.mapa': 'Mira las necesidades de tu zona y confirma las que sean reales. Entre vecinos nos validamos y nos ayudamos.',

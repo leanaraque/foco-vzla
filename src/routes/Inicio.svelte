@@ -9,6 +9,7 @@
   import { leerNecesidadesPublicas, leerRecursosPublicos } from '../lib/db.js';
   import BrechaZona from '../components/BrechaZona.svelte';
   import Composicion from '../components/Composicion.svelte';
+  import Fuentes from '../components/Fuentes.svelte';
 
   const ir = createEventDispatcher();
   const navega = (p) => ir('ir', p);
@@ -138,11 +139,8 @@
   <!-- 5) QUÉ — composición por categoría (necesidades vs recursos) -->
   <Composicion {necesidades} {recursos} {cargando} />
 
-  <!-- 6) CONFIANZA — de dónde vienen los datos -->
-  <section class="bloque confianza">
-    <h2>{$t('inicio.confianza_titulo')}</h2>
-    <p class="confianza-txt">{$t('inicio.confianza_txt')}</p>
-  </section>
+  <!-- 6) CONFIANZA — procedencia: de dónde vienen los datos -->
+  <Fuentes {necesidades} {recursos} {cargando} />
 </div>
 
 <style>
@@ -194,8 +192,6 @@
   /* Color con propósito (preatentivo): solo lo crítico y lo disponible llevan color. */
   .cifra-roja .num { color: var(--rojo); }
   .cifra-verde .num { color: var(--verde); }
-
-  .confianza-txt { color: var(--gris); font-size: 0.9rem; margin: 0; }
 
   @media (min-width: 560px) {
     .pulso { grid-template-columns: repeat(4, 1fr); }
