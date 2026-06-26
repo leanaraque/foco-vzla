@@ -83,6 +83,68 @@ service cloud.firestore {
         && d.sectorGeo is string && d.sectorGeo == d.geo.geohash[0:5];
     }
 
+    // === ESQUEMA CANÓNICO v2 (Spec §25.3) ==================================
+    // Coexiste con V1 durante la migración: el `create` acepta V1 || V2. Bloquea
+    // claves desconocidas (hasOnly), valida enums y los mapas estructurados
+    // opcionales. `prioridad`/`severidad`/`rescate_activo` son DERIVADOS por el
+    // cliente; el curador los recalcula server-side (§25.8). Aquí solo se acota su
+    // tipo/rango (no se confía en su valor para nada de seguridad).
+    function validRescate(m) {
+      return m.keys().hasOnly(['atrapados','cantidad','con_vida','desde'])
+        && m.atrapados is bool
+        && (!('cantidad' in m) || m.cantidad is number)
+        && (!('con_vida' in m) || m.con_vida is bool)
+        && (!('desde' in m) || isOneOf(m.desde, ['<6h','6-24h','+24h']));
+    }
+    function validMedico(m) {
+      return m.keys().hasOnly(['tipo','medicamento'])
+        && (!('tipo' in m) || isOneOf(m.tipo, ['herido','medicamento_critico','atencion']))
+        && (!('medicamento' in m) || isOneOf(m.medicamento, ['insulina','oxigeno','dialisis','otro']));
+    }
+    function validCantidad(m) {
+      return m.keys().hasOnly(['personas','dias'])
+        && (!('personas' in m) || m.personas is number)
+        && (!('dias' in m) || m.dias is number);
+    }
+    function validVigencia(m) {
+      return m.keys().hasOnly(['ultima_confirmacion_en','confirmaciones_vigencia'])
+        && m.confirmaciones_vigencia is number;
+    }
+    function validNuevaNecesidadV2(d) {
+      return d.keys().hasOnly([
+          'categoria','urgencia','para_quien','personas_rango','vulnerables','riesgos',
+          'rescate','medico','cantidad','severidad','rescate_activo','prioridad',
+          'fuente','estado','verificacion','reclamada_por','creador','descripcion',
+          'sector','geo','sectorGeo','precision','vigencia','confirmaciones',
+          'creada_en','actualizada_en'
+        ])
+        && isOneOf(d.categoria, ['rescate','medico','agua','alimento','refugio','servicios','otro'])
+        && isOneOf(d.urgencia, ['critica','alta','media'])
+        && isOneOf(d.para_quien, ['yo','familiar','vecino','desconocido'])
+        && isOneOf(d.personas_rango, ['1','2-5','6-20','+20'])
+        && isOneOf(d.severidad, ['total','severo','parcial','desconocida'])
+        && isOneOf(d.precision, ['exacta','sector'])
+        && d.rescate_activo is bool
+        && d.prioridad is number && d.prioridad >= 0 && d.prioridad <= 100
+        && d.estado == 'sin_atender'
+        && d.verificacion == 'no_verificada'
+        && d.reclamada_por == null
+        && isOneOf(d.fuente, ['web','sms','whatsapp','coordinador'])
+        && d.creador == request.auth.uid
+        && (!('confirmaciones' in d) || d.confirmaciones == 0)
+        && (!('vulnerables' in d) || (d.vulnerables is list && d.vulnerables.size() <= 6))
+        && (!('riesgos' in d) || (d.riesgos is list && d.riesgos.size() <= 5))
+        && (!('rescate' in d) || validRescate(d.rescate))
+        && (!('medico' in d) || validMedico(d.medico))
+        && (!('cantidad' in d) || validCantidad(d.cantidad))
+        && (!('vigencia' in d) || validVigencia(d.vigencia))
+        && d.descripcion is string && d.descripcion.size() <= 500
+        && d.sector is string && d.sector.size() > 0 && d.sector.size() <= 140
+        && d.geo.keys().hasOnly(['lat','lng','geohash'])
+        && d.geo.lat is number && d.geo.lng is number && d.geo.geohash is string
+        && d.sectorGeo is string && d.sectorGeo == d.geo.geohash[0:5];
+    }
+
     function validNuevoRecurso(d) {
       return d.keys().hasOnly([
           'categoria','sector','descripcion','geo','disponible','creador','creada_en'
@@ -100,8 +162,10 @@ service cloud.firestore {
     // tamaño acotados, y SIN campos desconocidos. `geo_exacta` es opcional.
     function validPrivado(d) {
       return d.creador == request.auth.uid
-        && d.keys().hasOnly(['creador', 'contacto', 'geo_exacta'])
+        && d.keys().hasOnly(['creador', 'contacto', 'geo_exacta', 'como_llegar', 'contacto_alterno'])
         && d.contacto is string && d.contacto.size() <= 140
+        && (!('contacto_alterno' in d) || (d.contacto_alterno is string && d.contacto_alterno.size() <= 140))
+        && (!('como_llegar' in d) || (d.como_llegar is string && d.como_llegar.size() <= 200))
         && (!('geo_exacta' in d) || (d.geo_exacta.lat is number && d.geo_exacta.lng is number));
     }
 
@@ -123,7 +187,9 @@ service cloud.firestore {
       // (solo coord) y la ubicación pública es de nivel sector (~1km).
       allow read: if true;
 
-      allow create: if isSignedIn() && validNuevaNecesidad(request.resource.data);
+      allow create: if isSignedIn()
+                    && (validNuevaNecesidad(request.resource.data)
+                        || validNuevaNecesidadV2(request.resource.data));
 
       // Gestión (reclamar, resolver, reabrir, verificar, invalidar): solo coord.
       // El CONTADOR de confirmaciones y la transición de estado los hace una Cloud

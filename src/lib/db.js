@@ -6,7 +6,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db, auth } from './firebase.js';
-import { geoPublicoSeguro, construirPrivado } from './payload.js';
+import { geoPublicoSeguro, construirPrivado, construirNecesidadPublica } from './payload.js';
 
 const PAGINA = 25; // tope de documentos por página → factura acotada
 
@@ -74,6 +74,38 @@ export function crearNecesidad({ categoria, urgencia, sector, descripcion, gps, 
   }
 
   return { id: ref.id, listo: Promise.all([pNecesidad, pPrivado]) };
+}
+
+// --- Crear necesidad v2 (esquema canónico §25.3) -------------------------
+// Mismo contrato offline-first que crearNecesidad (escrituras separadas, padre
+// antes que privado, sin await intermedio; ver §19). Usa el constructor PURO
+// `construirNecesidadPublica` (datos tipados + prioridad/severidad derivadas) y
+// añade aquí los campos de servidor (estado/verificación/creador/timestamps/
+// vigencia). El contacto, coords exactas, "cómo llegar" y contacto alterno van
+// SOLO al privado (frontera §6.2-r2, §25.9). Coexiste con las rules V1||V2.
+export function crearNecesidadV2(inp) {
+  const uid = auth.currentUser?.uid ?? null;
+  const ref = doc(collection(db, 'necesidades'));
+  const publico = construirNecesidadPublica(inp);
+
+  const pNec = setDoc(ref, {
+    ...publico,
+    fuente: 'web',
+    estado: 'sin_atender',
+    verificacion: 'no_verificada',
+    reclamada_por: null,
+    creador: uid,
+    vigencia: { ultima_confirmacion_en: serverTimestamp(), confirmaciones_vigencia: 0 },
+    creada_en: serverTimestamp(),
+    actualizada_en: serverTimestamp()
+  });
+
+  let pPriv = Promise.resolve();
+  const priv = construirPrivado(uid, (inp.contacto || '').trim(), inp.gps?.lat ?? null, inp.gps?.lng ?? null,
+    { como_llegar: inp.como_llegar, contacto_alterno: inp.contacto_alterno });
+  if (priv) pPriv = setDoc(doc(db, 'necesidades', ref.id, 'privado', 'datos'), priv);
+
+  return { id: ref.id, listo: Promise.all([pNec, pPriv]) };
 }
 
 // --- Crear recurso -------------------------------------------------------

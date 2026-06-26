@@ -80,6 +80,79 @@ describe('necesidades — create', () => {
   });
 });
 
+describe('necesidades — create v2 (esquema canónico §25.3)', () => {
+  // Factoría del esquema nuevo. El create acepta V1 || V2 durante la migración.
+  const v2 = (creador = 'anon1', over = {}) => ({
+    categoria: 'rescate', urgencia: 'alta', para_quien: 'vecino', personas_rango: '2-5',
+    severidad: 'severo', rescate_activo: true, prioridad: 72, precision: 'sector',
+    sector: 'Edificio X · Maiquetía', descripcion: 'Personas adentro', fuente: 'web',
+    estado: 'sin_atender', verificacion: 'no_verificada', reclamada_por: null, creador,
+    geo: { lat: 10.6, lng: -66.9, geohash: 'd6npq5e8x' }, sectorGeo: 'd6npq',
+    rescate: { atrapados: true, cantidad: 3, con_vida: true, desde: '<6h' },
+    vulnerables: ['ninos', 'mayores'], ...over
+  });
+
+  test('acepta necesidad v2 válida (rescate + vulnerables)', async () => {
+    await assertSucceeds(setDoc(doc(anon(), 'necesidades/v1'), v2('anon1')));
+  });
+  test('acepta v2 mínima (sin mapas opcionales)', async () => {
+    const n = v2('anon1'); delete n.rescate; delete n.vulnerables;
+    await assertSucceeds(setDoc(doc(anon(), 'necesidades/v2'), n));
+  });
+  test('rechaza para_quien inválido', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v3'), v2('anon1', { para_quien: 'nadie' })));
+  });
+  test('rechaza personas_rango inválido', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v4'), v2('anon1', { personas_rango: '1000' })));
+  });
+  test('rechaza precision inválida', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v5'), v2('anon1', { precision: 'gps' })));
+  });
+  test('rechaza prioridad fuera de [0,100]', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v6'), v2('anon1', { prioridad: 999 })));
+  });
+  test('rechaza rescate_activo no booleano', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v7'), v2('anon1', { rescate_activo: 'si' })));
+  });
+  test('rechaza rescate con clave desconocida (hasOnly del mapa)', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v8'), v2('anon1', { rescate: { atrapados: true, hack: 1 } })));
+  });
+  test('rechaza medico.tipo fuera del enum', async () => {
+    const n = v2('anon1', { categoria: 'medico', medico: { tipo: 'cualquiera' } }); delete n.rescate;
+    await assertFails(setDoc(doc(anon(), 'necesidades/v9'), n));
+  });
+  test('acepta medico con medicamento crítico', async () => {
+    const n = v2('anon1', { categoria: 'medico', medico: { tipo: 'medicamento_critico', medicamento: 'insulina' } }); delete n.rescate;
+    await assertSucceeds(setDoc(doc(anon(), 'necesidades/v9b'), n));
+  });
+  test('rechaza vulnerables que no es lista', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v10'), v2('anon1', { vulnerables: 'ninos' })));
+  });
+  test('rechaza clave desconocida top-level (hasOnly)', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v11'), v2('anon1', { backdoor: true })));
+  });
+  test('rechaza creador suplantado', async () => {
+    await assertFails(setDoc(doc(anon('anon1'), 'necesidades/v12'), v2('otro')));
+  });
+  test('F10: rechaza confirmaciones>0', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v13'), v2('anon1', { confirmaciones: 5 })));
+  });
+  test('rechaza sectorGeo que no coincide con el geohash', async () => {
+    await assertFails(setDoc(doc(anon(), 'necesidades/v14'), v2('anon1', { sectorGeo: 'zzzzz' })));
+  });
+
+  test('privado v2: el autor puede crear con como_llegar + contacto_alterno', async () => {
+    await seed((db) => setDoc(doc(db, 'necesidades/vp'), v2('anon1')));
+    await assertSucceeds(setDoc(doc(anon('anon1'), 'necesidades/vp/privado/datos'),
+      { creador: 'anon1', contacto: '0414-1234567', como_llegar: 'Piso 3, apto 3B, portón azul', contacto_alterno: '0424-7654321' }));
+  });
+  test('privado v2: rechaza como_llegar demasiado largo', async () => {
+    await seed((db) => setDoc(doc(db, 'necesidades/vp2'), v2('anon1')));
+    await assertFails(setDoc(doc(anon('anon1'), 'necesidades/vp2/privado/datos'),
+      { creador: 'anon1', contacto: '0414', como_llegar: 'x'.repeat(250) }));
+  });
+});
+
 describe('necesidades — read público (PIVOTE §22)', () => {
   test('§22: no-verificada ES legible públicamente (validación por multitud)', async () => {
     await seed((db) => setDoc(doc(db, 'necesidades/n5'), necesidad()));
