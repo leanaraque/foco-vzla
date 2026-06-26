@@ -922,3 +922,26 @@ Lean entregó la key real; se puso en **Secret Manager** (`RESEND_API_KEY`) y se
 
 **Fase 2b NO arrancada.** No se habilita producción ni se cargan datos reales. **El gate lo cierran el juez + el test 3G de Lean, no el agente.**
 
+
+---
+
+## 23. Dominio custom focovenezuela.org + ubicación exacta por pin (26 jun 2026)
+
+> El producto ya recibe uso real bajo `https://focovenezuela.org` (CNAME a Firebase Hosting, proxy Cloudflare).
+
+### focovenezuela.org no mostraba datos — CORREGIDO
+
+**Síntoma:** el dominio custom mostraba "No hay necesidades" / datos viejos pese a limpiar el cache de Cloudflare. Diagnóstico en vivo (Chrome DevTools): errores `AppCheck: ReCAPTCHA error (403)` y `signUp 403`. **Causa:** el dominio `focovenezuela.org` no estaba autorizado en **tres** allowlists de Google (todas restringidas a `foco-vzla.web.app`):
+1. **reCAPTCHA Enterprise** (dominios de la key) → App Check no podía emitir token.
+2. **Firebase Auth authorizedDomains** → login anónimo 403.
+3. **Referrers HTTP de la API key** → todas las llamadas 403.
+
+**Fix:** agregado `focovenezuela.org` y `www.focovenezuela.org` a las tres. Verificado: `signUp` y lecturas → 200. **Nota operativa:** App Check throttlea al cliente 24 h tras un 403; los navegadores que ya fallaron deben **borrar datos del sitio** (o usar incógnito) para recuperarse antes. Documentado para el futuro: **al agregar un dominio nuevo, actualizar las tres allowlists**.
+
+> ⚠️ **Privacidad (recordatorio §9-1):** se observó un reporte real con nombre y edificio de una víctima en la **descripción pública**. El operador debe revisar/editar las descripciones; la app ya advierte no escribir datos personales, pero la moderación humana es la última línea.
+
+### Ubicación exacta por pin en mapa (calle/edificio)
+
+**Problema:** el autocompletado es a nivel de lugar; una calle puntual (p.ej. "San Bernardino", Caracas) no se encuentra. **Solución (costo $0):** `MapaPin.svelte` — mapa Leaflet (diferido, tiles OSM gratis) con **pin arrastrable** (y click para colocar) en `/reportar`. Botón progresivo "Marcar el punto exacto en el mapa" que centra en el lugar elegido o el GPS; la persona afina el pin a su calle/edificio.
+
+**Privacidad:** el pin exacto va **solo al subdoc privado** (`geo_exacta`, lo ve el coordinador que toma el caso); el documento público sigue a **nivel sector** (~1km). Verificado e2e: público `10.34,-67.04` vs privado exacto `10.34315,-67.04303` (el público no revela el punto). Peso: app +1.5 KB gzip; Leaflet permanece en chunk diferido.
