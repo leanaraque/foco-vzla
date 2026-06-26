@@ -35,7 +35,7 @@ const diccionarios = {
     'inicio.puerta_reportar_d': 'Reporta una necesidad en menos de un minuto',
     'inicio.puerta_ayudar_t': 'Quiero ayudar',
     'inicio.puerta_ayudar_d': 'Mira dónde se necesita ayuda ahora mismo',
-    'inicio.ofrecer': '➕ Ofrecer un recurso (agua, transporte, refugio…)',
+    'inicio.ofrecer': 'Ofrecer un recurso (agua, transporte, refugio…)',
     'inicio.cargando': 'Cargando datos…',
     'inicio.ahora': 'ahora',
     'inicio.actualizado': 'actualizado hace',
@@ -56,6 +56,12 @@ const diccionarios = {
     'brecha.recursos': 'Recursos',
     'brecha.vacio': 'Aún no hay datos suficientes para mostrar la distribución por zona.',
     'brecha.nota': 'Zonas estimadas por ubicación aproximada. Se afinan a medida que se verifican los reportes.',
+
+    // Composición por categoría (escena 5)
+    'comp.lede': 'Qué piden los reportes frente a qué ofrecen los recursos disponibles.',
+    'comp.necesita': 'Lo que se necesita',
+    'comp.disponible': 'Lo que hay disponible',
+    'comp.vacio': 'Aún no hay datos suficientes para mostrar la composición.',
     'inicio.confianza_titulo': 'De dónde vienen estos datos',
     'inicio.confianza_txt': 'Reunimos reportes ciudadanos y datos abiertos de varias plataformas de la emergencia. La información se actualiza y verifica de forma continua; las cifras pueden cambiar a medida que se confirma cada caso.',
 
@@ -97,6 +103,8 @@ const diccionarios = {
     'cat.alimento': 'Alimento',
     'cat.refugio': 'Refugio',
     'cat.transporte': 'Transporte',
+    'cat.servicios': 'Servicios',
+    'cat.acopio': 'Acopio',
     'cat.otro': 'Otro',
 
     'urg.critica': 'Crítica',

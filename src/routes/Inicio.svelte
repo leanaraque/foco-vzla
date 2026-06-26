@@ -8,6 +8,7 @@
   import { asegurarSesionAnonima } from '../lib/stores.js';
   import { leerNecesidadesPublicas, leerRecursosPublicos } from '../lib/db.js';
   import BrechaZona from '../components/BrechaZona.svelte';
+  import Composicion from '../components/Composicion.svelte';
 
   const ir = createEventDispatcher();
   const navega = (p) => ir('ir', p);
@@ -79,14 +80,12 @@
   <!-- 2) DOS PUERTAS — bifurcación por intención (Persona 2 primero) -->
   <section class="puertas" aria-label={$t('inicio.puertas_aria')}>
     <button class="puerta puerta-roja btn-bloque" on:click={() => navega('/reportar')}>
-      <span class="puerta-emoji" aria-hidden="true">🆘</span>
       <span class="puerta-txt">
         <strong>{$t('inicio.puerta_reportar_t')}</strong>
         <small>{$t('inicio.puerta_reportar_d')}</small>
       </span>
     </button>
     <button class="puerta puerta-azul btn-bloque" on:click={() => navega('/mapa')}>
-      <span class="puerta-emoji" aria-hidden="true">👐</span>
       <span class="puerta-txt">
         <strong>{$t('inicio.puerta_ayudar_t')}</strong>
         <small>{$t('inicio.puerta_ayudar_d')}</small>
@@ -136,11 +135,8 @@
   <!-- 4) DÓNDE — la brecha por zona (necesidades vs recursos) -->
   <BrechaZona {necesidades} {recursos} {cargando} />
 
-  <!-- 5) Andamiaje narrativo (composición por categoría — próxima iteración) -->
-  <section class="bloque">
-    <h2>{$t('inicio.composicion_titulo')}</h2>
-    <p class="placeholder">{$t('inicio.proximamente')}</p>
-  </section>
+  <!-- 5) QUÉ — composición por categoría (necesidades vs recursos) -->
+  <Composicion {necesidades} {recursos} {cargando} />
 
   <!-- 6) CONFIANZA — de dónde vienen los datos -->
   <section class="bloque confianza">
@@ -167,7 +163,6 @@
     display: flex; align-items: center; gap: 0.8rem; text-align: left;
     padding: 0.95rem 1rem; border: none; color: #fff; min-height: 64px;
   }
-  .puerta-emoji { font-size: 1.7rem; line-height: 1; }
   .puerta-txt { display: flex; flex-direction: column; line-height: 1.25; }
   .puerta-txt strong { font-size: 1.1rem; }
   .puerta-txt small { font-size: 0.85rem; opacity: 0.92; }
@@ -199,11 +194,6 @@
   /* Color con propósito (preatentivo): solo lo crítico y lo disponible llevan color. */
   .cifra-roja .num { color: var(--rojo); }
   .cifra-verde .num { color: var(--verde); }
-
-  .placeholder {
-    background: var(--gris-claro); color: var(--gris); border-radius: var(--radio);
-    padding: 1.4rem 1rem; text-align: center; font-size: 0.88rem; margin: 0;
-  }
 
   .confianza-txt { color: var(--gris); font-size: 0.9rem; margin: 0; }
 
