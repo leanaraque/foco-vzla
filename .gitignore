@@ -18,3 +18,7 @@ coverage/
 # Backups y artefactos de datos (contienen subdocs privados: contacto de víctimas)
 backups/
 *.bak.json
+
+# Comentarios ciudadanos crudos (PII) + triaje generado por import-comentarios.mjs
+*_comentarios.json
+comentarios-triaje.*
