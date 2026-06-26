@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 // PREP (build-time, costo runtime CERO): extrae lugares de OpenStreetMap vía
 // Overpass API (gratis) para las zonas pobladas de Venezuela y genera
-// src/lib/lugares.json curado: { nombre, tipo, municipio, lat, lng, geohash, sectorGeo }.
+// src/lib/lugares.json curado: { nombre, tipo, municipio, lat, lng }.
+// (geohash/sectorGeo NO se guardan: la app recomputa el geohash desde lat/lng;
+// guardarlos solo engordaba el lazy-chunk.)
 //
 // Uso: node scripts/extract-lugares.mjs
 // (Solo lugares OSM/oficiales. NO incluye la lista privada de edificios del operador.)
 //
-// AMPLIACIÓN §23 (cobertura nacional): de 2 zonas (La Guaira + costa Carabobo) a
-// ~18 zonas principales del país. CAP elevado a 5000 para cubrir todo Venezuela
-// sin perder peso del lazy-chunk (sigue por debajo del leaflet ~43 KB gzip).
+// Cobertura nacional (§23): 18 zonas pobladas + municipios y PARROQUIAS de OSM
+// (admin_level 6/7, por bbox) procesadas PRIMERO para que zonas conocidas (p.ej.
+// "San Bernardino") no las tape un POI homónimo ni las corte el CAP de sectores.
+// Lazy-chunk resultante ≈ 90 KB gzip (cargado solo al escribir en /reportar).
 import { writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const { geohashForLocation } = require('geofire-common');
 
 // Zonas: bbox + centros de municipio/parroquia para asignar `municipio` por
 // cercanía y para el fallback "centro de municipio" cuando no hay GPS.
@@ -221,7 +221,7 @@ function tipoAmigable(tags) {
 
 // Prioridad para el CAP: ciudades/sectores primero, luego POIs de referencia.
 function prioridad(tipo) {
-  const orden = ['ciudad', 'sector', 'pueblo', 'caserío', 'hospital', 'centro de salud', 'plaza/parque', 'iglesia', 'escuela', 'mercado', 'lugar'];
+  const orden = ['municipio', 'parroquia', 'ciudad', 'sector', 'pueblo', 'caserío', 'hospital', 'centro de salud', 'plaza/parque', 'iglesia', 'escuela', 'mercado', 'lugar'];
   const i = orden.indexOf(tipo);
   return i === -1 ? 99 : i;
 }
@@ -249,7 +249,7 @@ const ENDPOINTS = [
 ];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function overpass(bbox) {
+async function overpassQuery(ql) {
   let ultimoErr;
   for (let intento = 0; intento < ENDPOINTS.length * 2; intento++) {
     const url = ENDPOINTS[intento % ENDPOINTS.length];
@@ -261,7 +261,7 @@ async function overpass(bbox) {
           'User-Agent': 'FOCO-ayuda-vzla/1.0 (https://github.com/leanaraque/foco-vzla; build-time place extraction)',
           'Accept': 'application/json'
         },
-        body: 'data=' + encodeURIComponent(consulta(bbox))
+        body: 'data=' + encodeURIComponent(ql)
       });
       if (res.ok) return (await res.json()).elements || [];
       ultimoErr = 'HTTP ' + res.status + ' en ' + url;
@@ -274,10 +274,64 @@ async function overpass(bbox) {
   throw new Error('Overpass agotado: ' + ultimoErr);
 }
 
-// Recorrer todas las zonas. Conservamos entre zonas mediante el Set `vistos`.
+const overpass = (bbox) => overpassQuery(consulta(bbox));
+
+// Límites administrativos: municipios (admin_level 6) y parroquias (admin_level 7).
+// Son las "zonas conocidas" (p.ej. Parroquia San Bernardino) que los POIs no cubren.
+// IMPORTANTE: se consulta por BBOX (no por `area["ISO3166-1"="VE"]`), porque el
+// filtro de área NO captura de forma fiable las relaciones de límite (traía solo
+// una fracción). Por bbox sí salen todas (verificado: 37 parroquias en Caracas).
+const consultaAdminBbox = (bbox) => `
+  [out:json][timeout:90];
+  (
+    relation["boundary"="administrative"]["admin_level"~"^(6|7)$"]["name"](${bbox});
+  );
+  out tags center;`;
+
+// Conservamos entre consultas mediante el Set `vistos`.
 const vistos = new Set();
 let lugares = [];
 
+// --- PRIMERO: Municipios y PARROQUIAS (zonas conocidas). Se procesan ANTES que
+//     los place-nodes para que tengan prioridad en el dedupe y su cuota ∞ — así
+//     "San Bernardino" sobrevive como parroquia y no lo corta el CAP de sectores
+//     ni lo tapa un place-node homónimo. Por bbox de cada zona (el filtro `area`
+//     de Overpass no captura fiablemente las relaciones de límite).
+let nAdmin = 0;
+for (const z of ZONAS) {
+  console.log(`Consultando Overpass admin (${z.id})…`);
+  let admin;
+  try {
+    admin = await overpassQuery(consultaAdminBbox(z.bbox));
+  } catch (e) {
+    console.log(`  (sin admin en ${z.id}: ${e.message})`);
+    continue;
+  }
+  console.log(`  ${admin.length} límites administrativos`);
+  for (const el of admin) {
+    const tags = el.tags || {};
+    const c = el.center;
+    if (!c || c.lat == null) continue;
+    let nombre = (tags.name || '').trim();
+    if (!nombre) continue;
+    nombre = nombre.replace(/^(Parroquia|Municipio)\s+/i, '').trim();
+    const tipo = tags.admin_level === '7' ? 'parroquia' : 'municipio';
+    const municipio = municipioCercano(c.lat, c.lon);
+    const clave = normaliza(nombre) + '|' + municipio;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    lugares.push({
+      nombre, tipo, municipio,
+      lat: Math.round(c.lat * 1e5) / 1e5,
+      lng: Math.round(c.lon * 1e5) / 1e5,
+    });
+    nAdmin++;
+  }
+  await sleep(800);
+}
+console.log(`  ${nAdmin} municipios/parroquias añadidos (acumulado ${lugares.length})`);
+
+// --- LUEGO: place-nodes y POIs por zona.
 for (const z of ZONAS) {
   console.log(`Consultando Overpass (${z.id})…`);
   const els = await overpass(z.bbox);
@@ -292,15 +346,12 @@ for (const z of ZONAS) {
     const clave = normaliza(nombre) + '|' + municipio;
     if (vistos.has(clave)) continue;
     vistos.add(clave);
-    const geohash = geohashForLocation([el.lat, el.lon]);
     lugares.push({
       nombre,
       tipo,
       municipio,
       lat: Math.round(el.lat * 1e5) / 1e5,
       lng: Math.round(el.lon * 1e5) / 1e5,
-      geohash,
-      sectorGeo: geohash.slice(0, 5)
     });
     nuevos++;
   }
@@ -314,8 +365,9 @@ for (const z of ZONAS) {
 // asigna cuota por tipo: los POI críticos (hospitales, salud) entran siempre,
 // y los sectores/pueblos comparten el resto.
 const CUOTA = {
+  municipio: Infinity,        // ~335 municipios — zonas conocidas, siempre todas
+  parroquia: Infinity,        // ~1140 parroquias (p.ej. San Bernardino) — SIEMPRE
   ciudad: Infinity,           // las ciudades son pocas, siempre todas
-  municipio: Infinity,        // los centros de municipio (se reinyectan abajo)
   hospital: 400,              // referencia médica crítica
   'centro de salud': 400,
   mercado: 300,
@@ -327,7 +379,7 @@ const CUOTA = {
   sector: 1800,
   lugar: 200
 };
-const CAP_TOTAL = 5000;
+const CAP_TOTAL = 6500;       // sube para acomodar municipios + parroquias nacionales
 
 // Ordena dentro de cada tipo alfabéticamente para reproducibilidad.
 lugares.sort((x, y) => x.nombre.localeCompare(y.nombre));
@@ -367,8 +419,7 @@ for (const c of CENTROS) {
   const nombreCentro = c.m.split(',')[0].trim();
   const clave = normaliza(nombreCentro) + '|' + c.m;
   if (!vistos.has(clave)) {
-    const gh = geohashForLocation([c.lat, c.lng]);
-    lugares.unshift({ nombre: nombreCentro, tipo: 'municipio', municipio: c.m, lat: c.lat, lng: c.lng, geohash: gh, sectorGeo: gh.slice(0, 5) });
+    lugares.unshift({ nombre: nombreCentro, tipo: 'municipio', municipio: c.m, lat: c.lat, lng: c.lng });
     vistos.add(clave);
   }
 }
