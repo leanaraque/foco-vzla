@@ -44,7 +44,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           firebase: ['firebase/app', 'firebase/app-check', 'firebase/auth', 'firebase/firestore'],
-          leaflet: ['leaflet']
+          leaflet: ['leaflet', 'leaflet.markercluster']
         }
       }
     }

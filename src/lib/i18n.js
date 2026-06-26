@@ -83,6 +83,7 @@ const diccionarios = {
     'mapa.buscar_ph': 'Buscar por zona, edificio, tipo…',
     'mapa.sin_resultados': 'Sin resultados para tu búsqueda.',
     'leyenda.necesidad': 'Necesidad',
+    'leyenda.rescate': 'Crítica / rescate',
     'leyenda.recurso': 'Recurso',
     'leyenda.tu_punto': 'Tu punto',
     'mapa.desde_cache': 'Mostrando datos guardados. Pulsa Actualizar para lo último.',
