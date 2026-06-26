@@ -981,3 +981,6 @@ Lean entregó la key real; se puso en **Secret Manager** (`RESEND_API_KEY`) y se
 - **Moderación de datos personales** en descripciones públicas (se observó nombre de víctima en un reporte ciudadano) — control humano del operador antes de verificar (§9-1).
 - El aviso del mapa "ubicación aproximada a nivel de sector" no distingue aún los edificios (exactos) de los reportes ciudadanos (sector); ajuste de copy pendiente.
 - **Gate de Fase 2a** (juez + test 3G de Lean) y **Fase 2b** siguen sin cerrarse/arrancar; el producto opera en producción bajo decisión del operador.
+
+### 24.7 Mapa unificado (26 jun)
+Un único componente `MapaUnificado.svelte` reemplaza a `MapView` y `MapaPin`: el **mismo mapa** en `/mapa`, `/reportar`, `/recursos` y `/panel`. Muestra **necesidades** (color por urgencia) y **recursos** (verde) como marcadores, con leyenda; en modo reporte añade el **pin arrastrable** sobre el mismo mapa con los datos existentes como contexto. El footer pasó a links discretos (antes pills que se veían pesadas sobre el mapa). Los CSVs fuente del operador no se versionan (repo público).
