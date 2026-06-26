@@ -3,15 +3,21 @@
   import { t } from '../lib/i18n.js';
   import { online, asegurarSesionAnonima } from '../lib/stores.js';
   import { crearRecurso, suscribirRecursos } from '../lib/db.js';
+  import LugarAutocomplete from '../components/LugarAutocomplete.svelte';
+  import MapaPin from '../components/MapaPin.svelte';
 
   const categorias = ['agua', 'transporte', 'refugio', 'medico', 'alimento', 'otro'];
 
   let mostrarForm = false;
   let categoria = '';
   let sector = '';
+  let referencia = null;     // lugar elegido del autocompletado
   let descripcion = '';
   let contacto = '';
-  let lat = null, lng = null, gpsEstado = '';
+  let lat = null, lng = null, gpsEstado = '';   // GPS preciso
+  // Selector de pin (camino sugerido, igual que Reportar).
+  let mostrarMapa = true;
+  let pinLat = null, pinLng = null, centroMapa = null;
   let enviando = false, error = '', okMsg = '';
 
   let items = [];
@@ -22,26 +28,42 @@
     if (!navigator.geolocation) { gpsEstado = 'error'; return; }
     gpsEstado = 'buscando';
     navigator.geolocation.getCurrentPosition(
-      (pos) => { lat = pos.coords.latitude; lng = pos.coords.longitude; gpsEstado = 'ok'; },
+      (pos) => {
+        lat = pos.coords.latitude; lng = pos.coords.longitude; gpsEstado = 'ok';
+        centroMapa = { lat, lng }; mostrarMapa = true;
+      },
       () => { gpsEstado = 'error'; },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
     );
   }
 
+  function onLugar(e) {
+    const l = e.detail;
+    if (l && Number.isFinite(l.lat)) centroMapa = { lat: l.lat, lng: l.lng };
+  }
+
   async function registrar() {
     error = ''; okMsg = '';
     if (!categoria) { error = $t('comun.error'); return; }
-    if (!sector && !(lat && lng)) { error = $t('reportar.falta_ubicacion'); return; }
+    const hayPin = pinLat != null && pinLng != null;
+    if (!sector && !referencia && !(lat && lng) && !hayPin) { error = $t('reportar.falta_ubicacion'); return; }
     enviando = true;
     try {
       await asegurarSesionAnonima();
+      const exacto = hayPin ? { lat: pinLat, lng: pinLng }
+                   : (lat != null && lng != null ? { lat, lng } : null);
       const { listo } = crearRecurso({
-        categoria, sector: sector || '(sin sector)', descripcion,
-        lat, lng, contacto: contacto.trim()
+        categoria,
+        sector: sector || (referencia ? referencia.nombre : '(sin sector)'),
+        descripcion,
+        gps: exacto,
+        referencia,
+        contacto: contacto.trim()
       });
       if ($online) await listo; else listo.catch(() => {});
       okMsg = $t('reportar.ok');
-      categoria = ''; sector = ''; descripcion = ''; contacto = ''; lat = null; lng = null; gpsEstado = '';
+      categoria = ''; sector = ''; referencia = null; descripcion = ''; contacto = '';
+      lat = null; lng = null; gpsEstado = ''; pinLat = null; pinLng = null; centroMapa = null; mostrarMapa = true;
       mostrarForm = false;
     } catch (e) { error = $t('comun.error'); }
     finally { enviando = false; }
@@ -68,10 +90,26 @@
       </select>
 
       <label for="rsector">{$t('reportar.ubicacion')}</label>
-      <input id="rsector" bind:value={sector} />
+      <LugarAutocomplete bind:valor={sector} bind:elegido={referencia} on:seleccion={onLugar} />
+      <p class="ayuda">{$t('reportar.ubicacion_ayuda')}</p>
       <button type="button" class="btn-bloque" style="margin-top:.5rem" on:click={usarGps}>
         📍 {$t('reportar.usar_gps')} {gpsEstado === 'ok' ? '✓' : gpsEstado === 'buscando' ? '…' : gpsEstado === 'error' ? '⚠' : ''}
       </button>
+
+      <!-- Punto exacto en mapa — camino sugerido, igual que Reportar. -->
+      {#if mostrarMapa}
+        <div class="mapa-titulo">{$t('reportar.mapa_titulo')}</div>
+        <p class="ayuda">{$t('reportar.mapa_ayuda')}</p>
+        <MapaPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} />
+        {#if pinLat != null}<p class="ayuda pin-ok">✓ {$t('reportar.mapa_marcado')}</p>{/if}
+        <button type="button" class="enlace-ocultar" on:click={() => (mostrarMapa = false)}>
+          {$t('reportar.mapa_ocultar')}
+        </button>
+      {:else}
+        <button type="button" class="btn-bloque" style="margin-top:.5rem" on:click={() => (mostrarMapa = true)}>
+          {$t('reportar.mapa_toggle')}{#if pinLat != null} ✓{/if}
+        </button>
+      {/if}
 
       <label for="rdesc">{$t('reportar.descripcion')}</label>
       <textarea id="rdesc" bind:value={descripcion} maxlength="500"></textarea>
@@ -103,3 +141,12 @@
     {/if}
   </div>
 </div>
+
+<style>
+  .mapa-titulo { font-weight: 700; margin: 0.9rem 0 0.2rem; }
+  .pin-ok { color: var(--verde); font-weight: 600; }
+  .enlace-ocultar {
+    background: none; border: none; min-height: 0; padding: 0.35rem 0;
+    color: var(--gris); text-decoration: underline; font-size: 0.85rem;
+  }
+</style>

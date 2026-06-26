@@ -79,8 +79,15 @@ export function crearNecesidad({ categoria, urgencia, sector, descripcion, gps, 
 // --- Crear recurso -------------------------------------------------------
 // Mismo orden que crearNecesidad: recurso (padre) primero, privado después,
 // escrituras separadas (no batch), sin await intermedio. Ver §19.
-export function crearRecurso({ categoria, sector, descripcion, lat, lng, contacto }) {
-  const geo = geoPublicoSeguro(lat, lng);
+export function crearRecurso({ categoria, sector, descripcion, gps, referencia, contacto }) {
+  // Igual que crearNecesidad (§22.11/§23): geo público a nivel sector (GPS o pin →
+  // referencia → centro de zona); coords EXACTAS solo al privado vía gps/pin.
+  const gLat = gps?.lat, gLng = gps?.lng;
+  const rLat = referencia?.lat, rLng = referencia?.lng;
+  const geo =
+    Number.isFinite(gLat) ? geoPublicoSeguro(gLat, gLng) :
+    Number.isFinite(rLat) ? geoPublicoSeguro(rLat, rLng) :
+    geoPublicoSeguro(null, null);
   const uid = auth.currentUser?.uid ?? null;
   const ref = doc(collection(db, 'recursos'));
 
@@ -95,7 +102,7 @@ export function crearRecurso({ categoria, sector, descripcion, lat, lng, contact
   });
 
   let pPrivado = Promise.resolve();
-  const priv = construirPrivado(uid, contacto, lat, lng);
+  const priv = construirPrivado(uid, contacto, gLat, gLng);
   if (priv) {
     pPrivado = setDoc(doc(db, 'recursos', ref.id, 'privado', 'datos'), priv);
   }
