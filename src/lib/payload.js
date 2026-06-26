@@ -1,7 +1,7 @@
 // Construcción de payloads para necesidades/recursos. Módulo PURO (sin Firebase)
 // para poder unit-testearlo sin emulador. db.js lo usa para armar los documentos.
 import { geoPublico } from './geo.js';
-import { calcularPrioridad, esRescateActivo } from './prioridad.js';
+import { calcularPrioridad, esRescateActivo, bandaPrioridad } from './prioridad.js';
 
 // Centro aproximado de la zona del evento (Morón/Carabobo). Se usa SOLO para el
 // geo PÚBLICO cuando el reportante no comparte GPS; el sector textual aporta el
@@ -93,7 +93,6 @@ export function construirNecesidadPublica(inp = {}) {
 
   const d = {
     categoria: enEnum(inp.categoria, ENUM.categoria, 'otro'),
-    urgencia: enEnum(inp.urgencia, ENUM.urgencia, 'media'),
     para_quien: enEnum(inp.para_quien, ENUM.para_quien, 'desconocido'),
     personas_rango: enEnum(inp.personas_rango, ENUM.personas_rango, '1'),
     severidad: enEnum(inp.severidad, ENUM.severidad, 'desconocida'),
@@ -109,8 +108,12 @@ export function construirNecesidadPublica(inp = {}) {
   const med = limpiaMedico(inp.medico); if (med) d.medico = med;
   const cant = limpiaCantidad(inp.cantidad); if (cant) d.cantidad = cant;
 
-  // Derivados (Spec §25.5): rescate_activo y prioridad salen de las señales.
+  // Derivados (Spec §25.5): rescate_activo, prioridad y la urgencia (que deja de
+  // ser auto-declarada y se deriva de la banda de prioridad, para que el mapa siga
+  // coloreando con sentido sin pedírsela al usuario).
   d.rescate_activo = esRescateActivo(d);
   d.prioridad = calcularPrioridad(d); // recién creada → sin decaimiento (frescura 0)
+  const banda = bandaPrioridad(d.prioridad);
+  d.urgencia = banda === 'critica' ? 'critica' : banda === 'alta' ? 'alta' : 'media';
   return d;
 }

@@ -97,6 +97,7 @@ describe('construirNecesidadPublica — esquema canónico v2 (§25.3)', () => {
     expect(d.sectorGeo).toBe(d.geo.geohash.slice(0, 5));
     expect(typeof d.prioridad).toBe('number');
     expect(typeof d.rescate_activo).toBe('boolean');
+    expect(['critica', 'alta', 'media']).toContain(d.urgencia); // derivada, no pedida
     // nada sensible en el público
     expect('contacto' in d).toBe(false);
     expect('geo_exacta' in d).toBe(false);
