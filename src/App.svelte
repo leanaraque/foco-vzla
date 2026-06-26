@@ -125,13 +125,17 @@
   .marca-nombre { font-weight: 800; font-size: 1.15rem; letter-spacing: 0.3px; }
   .marca-slogan { font-size: 0.72rem; font-weight: 500; color: rgba(255,255,255,0.82); }
   .offline { background: var(--amarillo); color: #4a3b00; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.5rem; border-radius: 999px; }
-  main { padding-bottom: 7rem; }
 
+  /* La tabbar es fija abajo; reservamos su alto para que NADA quede tapado. */
+  :global(body) { padding-bottom: 3.5rem; }
+  main { padding-bottom: 0.5rem; }
+
+  /* Footer en FLUJO normal (no fijo): aparece al final del contenido, sobre la
+     tabbar, y nunca se superpone a los mapas (antes era fixed y los tapaba). */
   .pie {
-    position: fixed; bottom: 3.1rem; left: 0; right: 0;
     display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap;
     background: var(--bg); border-top: 1px solid var(--borde);
-    padding: 0.45rem 0.6rem; z-index: 19;
+    padding: 0.7rem 0.6rem; margin-top: 1rem;
   }
   .pie-btn {
     display: inline-flex; align-items: center; gap: 0.3rem;

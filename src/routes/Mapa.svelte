@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { t } from '../lib/i18n.js';
+  import { normaliza } from '../lib/autocomplete.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
   import { leerNecesidadesPublicas, confirmarNecesidad, yaConfirme } from '../lib/db.js';
   import MapView from '../components/MapView.svelte';
@@ -8,9 +9,20 @@
   const demo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
   let items = [];
+  let busca = '';   // texto del buscador
   let origen = '';
   let cargando = true;
   let vista = 'lista'; // 'lista' | 'mapa'
+
+  // Filtro del buscador (cliente, insensible a acentos): sector, descripción,
+  // categoría y urgencia. La lista y el mapa usan los items filtrados.
+  $: filtrados = (() => {
+    const q = normaliza(busca);
+    if (q.length < 2) return items;
+    return items.filter((n) =>
+      normaliza(`${n.sector} ${n.descripcion} ${n.categoria} ${n.urgencia}`).includes(q)
+    );
+  })();
   let seleccion = null; // necesidad abierta en el detalle
   let confirmadas = {}; // id → bool (si este usuario ya confirmó)
   let confirmando = false;
@@ -86,6 +98,13 @@
     </button>
   </div>
 
+  <div class="buscador">
+    <input type="search" bind:value={busca} placeholder={$t('mapa.buscar_ph')} aria-label={$t('mapa.buscar_ph')} />
+    {#if busca.length >= 2}
+      <span class="buscador-n">{filtrados.length} / {items.length}</span>
+    {/if}
+  </div>
+
   {#if origen === 'cache'}
     <p class="ayuda">{$t('mapa.desde_cache')}</p>
   {/if}
@@ -95,9 +114,11 @@
   {:else if items.length === 0}
     <p class="ayuda">{$t('mapa.vacio')}</p>
   {:else if vista === 'mapa'}
-    <MapView {items} />
+    <MapView items={filtrados} />
+  {:else if filtrados.length === 0}
+    <p class="ayuda">{$t('mapa.sin_resultados')}</p>
   {:else}
-    {#each items as n (n.id)}
+    {#each filtrados as n (n.id)}
       <button class="tarjeta item {n.verificacion === 'pendiente_revision' ? 'prioritario' : ''}" on:click={() => abrir(n)}>
         {#if n.verificacion === 'pendiente_revision'}
           <div class="badge-prio">★ {$t('mapa.revisar')}</div>
@@ -160,6 +181,9 @@
   .toggle button { flex: 1; }
   .toggle button.activo { background: var(--azul); color: #fff; }
   .actualizar { white-space: nowrap; }
+  .buscador { position: relative; margin-bottom: 0.7rem; }
+  .buscador input { width: 100%; padding-right: 3.5rem; }
+  .buscador-n { position: absolute; right: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--gris); font-size: 0.8rem; font-weight: 600; }
   .item { display: block; width: 100%; text-align: left; cursor: pointer; }
   .item.prioritario { border-color: var(--rojo); border-width: 2px; }
   .badge-prio { background: var(--rojo); color: #fff; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.5rem; border-radius: 999px; display: inline-block; margin-bottom: 0.4rem; }

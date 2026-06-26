@@ -37,6 +37,8 @@ const diccionarios = {
     'mapa.mapa': 'Mapa',
     'mapa.actualizar': 'Actualizar',
     'mapa.actualizando': 'Actualizando…',
+    'mapa.buscar_ph': 'Buscar por zona, edificio, tipo…',
+    'mapa.sin_resultados': 'Sin resultados para tu búsqueda.',
     'mapa.desde_cache': 'Mostrando datos guardados. Pulsa Actualizar para lo último.',
     'mapa.vacio': 'No hay necesidades para mostrar todavía.',
     'mapa.sector_aviso': 'Ubicación aproximada a nivel de sector para proteger a las personas.',
