@@ -12,7 +12,7 @@ const diccionarios = {
     // Reencuadre §9-2 / §22.7-1: ayuda mutua, NO rescate; nadie garantiza acudir.
     // Las líneas oficiales (probablemente saturadas) se reemplazan por el mensaje
     // de ayuda mutua (decisión del operador, §23).
-    'banner.aviso': 'Es ayuda mutua entre vecinos, no un servicio de rescate: nadie garantiza que alguien acuda. Ante peligro inmediato, busca a vecinos cercanos y coordínense aquí.',
+    'banner.aviso': 'Una plataforma abierta que ordena la información de la emergencia para que vecinos y organizaciones coordinen el auxilio y salven el mayor número de vidas posible.',
 
     'footer.sugerencias': '💡 Sugerencias',
     'footer.csv': '⬇️ Descargar datos (CSV)',
