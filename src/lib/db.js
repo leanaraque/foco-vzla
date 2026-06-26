@@ -200,12 +200,13 @@ export async function leerNecesidadesPublicas({ forzarServidor = false, demo = f
     try {
       const cache = await getDocsFromCache(q);
       if (!cache.empty) {
-        return { items: cache.docs.map((d) => ({ id: d.id, ...d.data() })), origen: 'cache' };
+        return { items: cache.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.duplicado_de), origen: 'cache' };
       }
     } catch (_) { /* sin caché → al servidor */ }
   }
   const snap = await getDocs(q); // 1 página facturable; solo en frío o refresco manual
-  return { items: snap.docs.map((d) => ({ id: d.id, ...d.data() })), origen: 'servidor' };
+  // §25: se ocultan los duplicados marcados por el curador/migración (duplicado_de).
+  return { items: snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.duplicado_de), origen: 'servidor' };
 }
 
 // Export CSV de datos PÚBLICOS (§23): cualquiera puede descargar las necesidades
@@ -225,6 +226,7 @@ export async function exportarNecesidadesCsv({ limite = 2000 } = {}) {
   const filas = [cols.join(',')];
   for (const d of snap.docs) {
     const n = d.data();
+    if (n.duplicado_de) continue; // no exportar duplicados marcados (§25)
     const fecha = n.creada_en?.toDate ? n.creada_en.toDate().toISOString() : '';
     filas.push([
       d.id, n.categoria, n.urgencia, n.sector, n.descripcion, n.estado,
@@ -242,12 +244,12 @@ export async function leerRecursosPublicos({ forzarServidor = false, max = 2000 
   if (!forzarServidor) {
     try {
       const cache = await getDocsFromCache(q);
-      if (!cache.empty) return cache.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (!cache.empty) return cache.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.duplicado_de);
     } catch (_) { /* sin caché → servidor */ }
   }
   try {
     const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.duplicado_de);
   } catch (_) {
     return [];
   }

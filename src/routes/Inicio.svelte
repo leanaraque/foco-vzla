@@ -23,7 +23,7 @@
   // Una necesidad de rescate "activa" = categoría rescate (o flag rescate_activo del
   // esquema v2 cuando exista) y aún no resuelta. Resiliente a ambos esquemas.
   const esRescateActivo = (n) =>
-    (n.rescate_activo === true || n.categoria === 'rescate') &&
+    (n.rescate_activo === true || (n.rescate_activo == null && n.categoria === 'rescate')) &&
     n.estado !== 'resuelta' && n.estado !== 'cerrada_invalida';
 
   const fechaDe = (x) => (x?.creada_en?.toDate ? x.creada_en.toDate() : null);
