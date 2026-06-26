@@ -11,3 +11,6 @@ serviceAccountKey.json
 .vite/
 coverage/
 .e2e/
+
+# Datos fuente del operador (no al repo público)
+*.csv
