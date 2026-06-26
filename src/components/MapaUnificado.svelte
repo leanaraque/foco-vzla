@@ -11,8 +11,11 @@
   export let lng = null;
   export let centro = null;      // { lat, lng } para recentrar
   export let alto = '62vh';
+  export let acciones = false;   // muestra botones Confirmar/Resuelto en el popup (panel)
+  export let enfocado = null;    // { id, t } → vuela al punto y abre su popup
 
   const dispatch = createEventDispatcher();
+  const markerPorId = new Map(); // id → marker (para enfocar desde la lista)
   // Escala de peligro intuitiva: rojo (crítica) → naranja (alta) → amarillo (media).
   const colorUrg = { critica: '#e63946', alta: '#d97706', media: '#eab308' };
   const VERDE = '#2a9d54';
@@ -47,24 +50,36 @@
       html: `<div class="cl ${cls}" style="width:${size}px;height:${size}px"><span>${n}</span></div>` });
   }
 
+  // Botones de acción del popup (solo en el panel): Confirmar + Resuelto.
+  function accionesHtml(n) {
+    if (!acciones) return '';
+    return `<div class="foco-acc">`
+      + `<button type="button" class="foco-confirmar" data-id="${esc(n.id)}">${esc($t('pmapa.pop_confirmar'))}</button>`
+      + `<button type="button" class="foco-resuelto" data-id="${esc(n.id)}">${esc($t('pmapa.pop_resuelto'))}</button>`
+      + `</div>`;
+  }
+
   function dibujar() {
     if (!mapa || !L) return;
     capaNec.clearLayers();
     capaRec.clearLayers();
+    markerPorId.clear();
     const pts = [], mN = [], mR = [];
     for (const n of necesidades) {
       if (!n.geo?.lat) continue;
       const activo = n.rescate_activo === true;
       const color = activo ? '#e63946' : (colorUrg[n.urgencia] || '#1666a0');
-      const m = L.marker([n.geo.lat, n.geo.lng], { icon: dotIcon(color, activo), _activo: activo });
-      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · 🆘' : ''}<br>${esc(n.descripcion || '')}`);
+      const m = L.marker([n.geo.lat, n.geo.lng], { icon: dotIcon(color, activo), _activo: activo, _grupo: 'nec' });
+      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc(n.descripcion || '')}${accionesHtml(n)}`);
+      if (n.id) markerPorId.set(n.id, m);
       mN.push(m);
       pts.push([n.geo.lat, n.geo.lng]);
     }
     for (const r of recursos) {
       if (!r.geo?.lat) continue;
-      const m = L.marker([r.geo.lat, r.geo.lng], { icon: dotIcon(VERDE, false) });
+      const m = L.marker([r.geo.lat, r.geo.lng], { icon: dotIcon(VERDE, false), _grupo: 'rec' });
       m.bindPopup(`<b>${$t('recursos.disponible')}: ${$t('cat.' + r.categoria) || r.categoria}</b><br>${esc(r.sector || '')}<br>${esc(r.descripcion || '')}`);
+      if (r.id) markerPorId.set(r.id, m);
       mR.push(m);
       pts.push([r.geo.lat, r.geo.lng]);
     }
@@ -114,6 +129,17 @@
       dispatch('cambio', { lat, lng });
     }
 
+    // Cablea los botones del popup (Confirmar/Resuelto) cuando se abre. Los popups
+    // son HTML crudo de Leaflet → escuchamos al abrir y emitimos eventos al padre.
+    mapa.on('popupopen', (e) => {
+      const el = e.popup.getElement();
+      if (!el) return;
+      const c = el.querySelector('.foco-confirmar');
+      const r = el.querySelector('.foco-resuelto');
+      if (c && !c._wired) { c._wired = true; c.addEventListener('click', () => dispatch('confirmar', { id: c.dataset.id, btn: c })); }
+      if (r && !r._wired) { r._wired = true; r.addEventListener('click', () => dispatch('resuelto', { id: r.dataset.id })); }
+    });
+
     listo = true;
     dibujar();
     setTimeout(() => mapa && mapa.invalidateSize(), 60);
@@ -121,8 +147,19 @@
 
   onDestroy(() => { if (mapa) mapa.remove(); });
 
+  // Vuela al punto seleccionado en la lista y abre su popup (revela el clúster).
+  let _focoPrev = null;
+  function focar(f) {
+    const m = f && markerPorId.get(f.id);
+    if (!m || !mapa) return;
+    const grupo = m.options._grupo === 'rec' ? capaRec : capaNec;
+    try { grupo.zoomToShowLayer(m, () => m.openPopup()); }
+    catch (_) { mapa.setView(m.getLatLng(), 16); m.openPopup(); }
+  }
+
   $: if (listo) { necesidades, recursos; dibujar(); }
   $: if (listo && conPin && centro && Number.isFinite(centro.lat)) colocar(centro.lat, centro.lng, 16);
+  $: if (listo && enfocado && enfocado !== _focoPrev) { _focoPrev = enfocado; setTimeout(() => focar(enfocado), 0); }
 </script>
 
 <div class="mapa-wrap" style="--alto:{alto}">
@@ -166,4 +203,11 @@
   :global(.cl-rec) { background: #2a9d54; }
   :global(.cl-sos) { background: #e63946; }
   .leyenda i.sos-i { box-shadow: 0 0 0 1px rgba(0,0,0,0.15), 0 0 4px rgba(230,57,70,0.6); }
+
+  /* Acciones dentro del popup del mapa (Confirmar / Resuelto) */
+  :global(.foco-acc) { display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.6rem; }
+  :global(.foco-acc button) { width: 100%; border: none; border-radius: 8px; padding: 0.5rem 0.6rem; font-weight: 700; font-size: 0.82rem; cursor: pointer; color: #fff; }
+  :global(.foco-confirmar) { background: #0b3d5c; }
+  :global(.foco-resuelto) { background: #2a9d54; }
+  :global(.foco-acc button:disabled) { opacity: 0.6; cursor: default; }
 </style>

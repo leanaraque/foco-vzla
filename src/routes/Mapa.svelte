@@ -1,20 +1,22 @@
 <script>
-  // PANEL OPERATIVO de ayuda (§22 + principios de mapas de organismos de respuesta:
-  // conciencia situacional, semántica de color consistente, triaje, capas/filtros,
-  // estado por incidente, vigencia del dato). Presentación pura: consume db.js
-  // (read-only). Reutiliza MapaUnificado (no lo modifica). Mobile-first.
+  // PANEL OPERATIVO de ayuda (§22 + principios de mapas de respuesta: conciencia
+  // situacional, color consistente, triaje, capas/filtros, estado, vigencia).
+  // Presentación: consume db.js (read-only) + invoca la callable solicitarResolucion
+  // (Resend) para avisar a un coordinador. Reutiliza MapaUnificado. Mobile-first.
   import { onMount, onDestroy } from 'svelte';
   import { t } from '../lib/i18n.js';
+  import { app } from '../lib/firebase.js';
   import { normaliza } from '../lib/autocomplete.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
-  import { leerNecesidadesPublicas, leerRecursosPublicos, confirmarNecesidad, yaConfirme } from '../lib/db.js';
+  import { leerNecesidadesPublicas, leerRecursosPublicos, confirmarNecesidad } from '../lib/db.js';
   import MapaUnificado from '../components/MapaUnificado.svelte';
 
   const demo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
   let items = [], recursos = [], origen = '', cargando = true;
   let vista = 'lista';            // toggle SOLO en móvil: 'lista' | 'mapa'
-  let esDesktop = false;          // en desktop se ven lista y mapa a la vez
+  let esDesktop = false;
+  let enfocado = null;            // { id, t } → MapaUnificado vuela al punto
 
   // --- Filtros (control de capas + triaje) ---
   let busca = '', fTipo = 'todo', fCat = '', fUrg = '', fEstado = '';
@@ -25,10 +27,6 @@
 
   const qn = (s) => normaliza(s || '');
   $: q = qn(busca);
-  const txt = (s) => q.length < 2 || qn(s).includes(q);
-
-  // Triaje (§22.5): el aislado (pendiente_revision) va SIEMPRE primero; luego rescate
-  // activo, luego urgencia, luego recencia. Conciencia situacional: lo grave arriba.
   const ordU = { critica: 0, alta: 1, media: 2 };
   function triar(arr) {
     const peso = (n) => (n.verificacion === 'pendiente_revision' ? 0 : 1);
@@ -40,37 +38,72 @@
     );
   }
 
+  // q se referencia DIRECTAMENTE aquí para que Svelte recompute al teclear (el bug
+  // anterior era que la comparación vivía en una función y no se rastreaba).
   $: necFiltradas = (fTipo === 'rec') ? [] : triar(items.filter((n) =>
     (!fCat || n.categoria === fCat) &&
     (!fUrg || n.urgencia === fUrg) &&
     (!fEstado || (n.estado || 'sin_atender') === fEstado) &&
-    txt(`${n.sector} ${n.descripcion} ${n.categoria} ${n.urgencia}`)
+    (q.length < 2 || qn(`${n.sector} ${n.descripcion} ${n.categoria} ${n.urgencia}`).includes(q))
   ));
-  // Los recursos no tienen urgencia/estado de incidente → se ocultan si se filtra por eso.
   $: recFiltrados = (fTipo === 'nec' || fUrg || fEstado) ? [] : recursos.filter((r) =>
-    (!fCat || r.categoria === fCat) && txt(`${r.sector} ${r.descripcion} ${r.categoria}`)
+    (!fCat || r.categoria === fCat) &&
+    (q.length < 2 || qn(`${r.sector} ${r.descripcion} ${r.categoria}`).includes(q))
   );
   $: totalMostrado = necFiltradas.length + recFiltrados.length;
 
-  // KPIs de conciencia situacional (sobre el total, no lo filtrado).
+  // KPIs de conciencia situacional (sobre el total).
   $: kCritica = items.filter((n) => n.rescate_activo === true || n.urgencia === 'critica').length;
   $: kSinAtender = items.filter((n) => (n.estado || 'sin_atender') === 'sin_atender').length;
   $: kRecursos = recursos.length;
-
   $: mapaAlto = esDesktop ? 'calc(100vh - 188px)' : '58vh';
 
-  // --- detalle ---
-  let seleccion = null, selRec = null, confirmadas = {}, confirmando = false, cooldown = false;
-  async function abrir(n) { selRec = null; seleccion = n; if (!demo) confirmadas[n.id] = await yaConfirme(n.id); }
-  function abrirRec(r) { seleccion = null; selRec = r; }
-  async function confirmar() {
-    if (!seleccion || demo) return;
-    confirmando = true;
-    try { await confirmarNecesidad(seleccion.id); confirmadas[seleccion.id] = true; confirmadas = { ...confirmadas }; }
-    catch (_) { confirmadas[seleccion.id] = true; }
-    finally { confirmando = false; }
+  // Clic en la lista → vuela al punto en el mapa (en móvil cambia a la vista mapa).
+  function irAlPunto(item) {
+    enfocado = { id: item.id, t: Date.now() };
+    if (!esDesktop) vista = 'mapa';
   }
 
+  // --- Acciones del popup (emitidas por MapaUnificado) ---
+  async function onConfirmar(e) {
+    const { id, btn } = e.detail || {};
+    if (demo || !id) return;
+    try { await confirmarNecesidad(id); } catch (_) { /* ya confirmó o falla: igual agradecemos */ }
+    if (btn) { btn.textContent = $t('pmapa.confirmado_ok'); btn.disabled = true; }
+  }
+  function onResuelto(e) {
+    const it = items.find((n) => n.id === (e.detail || {}).id);
+    if (it) abrirResol(it);
+  }
+
+  // --- Formulario "¿Resuelto?" → email a un coordinador (honeypot + límite local) ---
+  let resolItem = null, rMotivo = '', rFuente = '', rContacto = '', rHoney = '';
+  let rEnviando = false, rResult = '', rError = '';
+  function abrirResol(n) { resolItem = n; rMotivo = ''; rFuente = ''; rContacto = ''; rHoney = ''; rResult = ''; rError = ''; }
+  function cerrarResol() { resolItem = null; }
+  async function enviarResol() {
+    rError = '';
+    if (rHoney) { resolItem = null; return; }                 // honeypot: bot → descartar
+    if (!rMotivo.trim()) { rError = $t('resol.falta'); return; }
+    const ultimo = Number(localStorage.getItem('foco_resol_ts') || 0);
+    if (Date.now() - ultimo < 60000) { rError = $t('resol.espera'); return; } // límite local
+    rEnviando = true;
+    try {
+      await asegurarSesionAnonima(); // App Check + sesión para invocar la función
+      const { getFunctions, httpsCallable } = await import('firebase/functions');
+      const fn = httpsCallable(getFunctions(app), 'solicitarResolucion');
+      await fn({
+        id: resolItem.id, sector: resolItem.sector || '', categoria: resolItem.categoria || '',
+        urgencia: resolItem.urgencia || '', descripcion: resolItem.descripcion || '',
+        motivo: rMotivo.trim(), fuente: rFuente.trim(), contacto: rContacto.trim(),
+        url: location.origin + '/mapa?focus=' + resolItem.id
+      });
+      localStorage.setItem('foco_resol_ts', String(Date.now()));
+      rResult = 'ok';
+    } catch (e) { rError = $t('resol.error'); } finally { rEnviando = false; }
+  }
+
+  // --- carga ---
   async function cargar(forzarServidor = false) {
     cargando = true;
     try {
@@ -79,20 +112,25 @@
       if (!demo) recursos = await leerRecursosPublicos({ forzarServidor }).catch(() => []);
     } finally { cargando = false; }
   }
+  let cooldown = false;
   async function actualizar() {
     if (cooldown) return; cooldown = true; await cargar(true);
-    setTimeout(() => (cooldown = false), 15000); // anti-abuso de lecturas
+    setTimeout(() => (cooldown = false), 15000);
   }
 
-  let mq;
+  let mq, onMq;
   onMount(async () => {
     mq = window.matchMedia('(min-width: 900px)');
     esDesktop = mq.matches;
-    mq.addEventListener('change', (e) => (esDesktop = e.matches));
+    onMq = (e) => (esDesktop = e.matches);
+    mq.addEventListener('change', onMq);
     if (!demo) { try { await asegurarSesionAnonima(); } catch (_) { /* necesidades es público */ } }
     await cargar(false);
+    // Enlace profundo del correo (?focus=<id>): vuela a ese punto.
+    const f = new URLSearchParams(window.location.search).get('focus');
+    if (f) { enfocado = { id: f, t: Date.now() }; if (!esDesktop) vista = 'mapa'; }
   });
-  onDestroy(() => mq && mq.removeEventListener && mq.removeEventListener('change', () => {}));
+  onDestroy(() => { if (mq && onMq) mq.removeEventListener('change', onMq); });
 </script>
 
 <div class="panel">
@@ -103,14 +141,12 @@
     </button>
   </header>
 
-  <!-- Conciencia situacional: KPIs del total -->
   <div class="kpis">
     <div class="kpi k-rojo"><span class="n">{kCritica}</span><span class="l">{$t('pmapa.kpi_critica')}</span></div>
     <div class="kpi"><span class="n">{kSinAtender}</span><span class="l">{$t('pmapa.kpi_sin_atender')}</span></div>
     <div class="kpi k-verde"><span class="n">{kRecursos}</span><span class="l">{$t('pmapa.kpi_recursos')}</span></div>
   </div>
 
-  <!-- Control de capas + filtros -->
   <div class="filtros">
     <input class="buscar" name="buscar" type="search" bind:value={busca} placeholder={$t('mapa.buscar_ph')} aria-label={$t('mapa.buscar_ph')} />
     <div class="tipo" role="group" aria-label="tipo">
@@ -135,7 +171,6 @@
     <div class="meta">
       <span class="cuenta">{$t('pmapa.mostrando')} <b>{totalMostrado}</b></span>
       <button class="link" on:click={limpiar}>{$t('filtro.limpiar')}</button>
-      <!-- toggle SOLO móvil -->
       <div class="toggle">
         <button class:on={vista === 'lista'} on:click={() => (vista = 'lista')}>{$t('mapa.lista')}</button>
         <button class:on={vista === 'mapa'} on:click={() => (vista = 'mapa')}>{$t('mapa.mapa')}</button>
@@ -145,7 +180,6 @@
   </div>
 
   <div class="cuerpo">
-    <!-- LISTA (aside en desktop; en móvil según toggle) -->
     {#if esDesktop || vista === 'lista'}
       <aside class="lista">
         <p class="aviso-sector">{$t('mapa.sector_aviso')}</p>
@@ -155,7 +189,7 @@
           <p class="ayuda">{$t('pmapa.sin_resultados')}</p>
         {:else}
           {#each necFiltradas as n (n.id)}
-            <button class="tarjeta item {n.verificacion === 'pendiente_revision' ? 'prioritario' : ''}" on:click={() => abrir(n)}>
+            <button class="tarjeta item {n.verificacion === 'pendiente_revision' ? 'prioritario' : ''}" on:click={() => irAlPunto(n)}>
               {#if n.verificacion === 'pendiente_revision'}<div class="badge-prio">{$t('mapa.revisar')}</div>{/if}
               <div class="tarjeta-row">
                 <span class="tag tag-u-{n.urgencia}">{$t('urg.' + n.urgencia)}</span>
@@ -168,7 +202,7 @@
             </button>
           {/each}
           {#each recFiltrados as r (r.id)}
-            <button class="tarjeta item item-rec" on:click={() => abrirRec(r)}>
+            <button class="tarjeta item item-rec" on:click={() => irAlPunto(r)}>
               <div class="tarjeta-row">
                 <span class="tag tag-rec">{$t('pmapa.recurso')}</span>
                 <span class="tag">{$t('cat.' + r.categoria)}</span>
@@ -181,52 +215,45 @@
       </aside>
     {/if}
 
-    <!-- MAPA (a la derecha en desktop; en móvil según toggle, montado fresco) -->
     {#if esDesktop || vista === 'mapa'}
       <div class="mapa-col">
-        <MapaUnificado necesidades={necFiltradas} recursos={recFiltrados} alto={mapaAlto} />
+        <MapaUnificado necesidades={necFiltradas} recursos={recFiltrados} alto={mapaAlto}
+          acciones={true} {enfocado} on:confirmar={onConfirmar} on:resuelto={onResuelto} />
       </div>
     {/if}
   </div>
 </div>
 
-<!-- Detalle de NECESIDAD (con confirmación) -->
-{#if seleccion}
-  <div class="overlay" on:click={() => (seleccion = null)} role="presentation">
+<!-- Formulario "¿Resuelto?" → avisa a un coordinador (no cambia el estado) -->
+{#if resolItem}
+  <div class="overlay" on:click={cerrarResol} role="presentation">
     <div class="hoja" on:click|stopPropagation role="dialog" aria-modal="true">
-      <div class="tarjeta-row">
-        <span class="tag tag-u-{seleccion.urgencia}">{$t('urg.' + seleccion.urgencia)}</span>
-        <span class="tag">{$t('cat.' + seleccion.categoria)}</span>
-        <span class="tag tag-{(seleccion.estado || 'sin_atender')}">{$t('estado.' + (seleccion.estado || 'sin_atender'))}</span>
-      </div>
-      <h2>{seleccion.sector}</h2>
-      {#if seleccion.descripcion}<p>{seleccion.descripcion}</p>{/if}
-      {#if !demo}
-        {#if confirmadas[seleccion.id]}
-          <p class="aviso-ok">{$t('mapa.ya_confirmaste')}</p>
-        {:else}
-          <button class="btn-primario btn-bloque btn-grande" on:click={confirmar} disabled={confirmando}>
-            {confirmando ? $t('mapa.confirmando') : $t('mapa.confirmar')}
-          </button>
-        {/if}
-      {/if}
-      <details class="ayudar"><summary>{$t('mapa.como_ayudar')}</summary><p>{$t('mapa.como_ayudar_texto')}</p></details>
-      <button class="btn-bloque" on:click={() => (seleccion = null)}>{$t('mapa.cerrar')}</button>
-    </div>
-  </div>
-{/if}
+      {#if rResult === 'ok'}
+        <p class="aviso-ok">{$t('resol.ok')}</p>
+        <button class="btn-bloque" on:click={cerrarResol}>{$t('mapa.cerrar')}</button>
+      {:else}
+        <h2>{$t('resol.titulo')}</h2>
+        <p class="r-sector">{resolItem.sector}</p>
+        <p class="r-intro">{$t('resol.intro')}</p>
 
-<!-- Detalle de RECURSO (informativo) -->
-{#if selRec}
-  <div class="overlay" on:click={() => (selRec = null)} role="presentation">
-    <div class="hoja" on:click|stopPropagation role="dialog" aria-modal="true">
-      <div class="tarjeta-row">
-        <span class="tag tag-rec">{$t('pmapa.recurso')}</span>
-        <span class="tag">{$t('cat.' + selRec.categoria)}</span>
-      </div>
-      <h2>{selRec.sector}</h2>
-      {#if selRec.descripcion}<p>{selRec.descripcion}</p>{/if}
-      <button class="btn-bloque" on:click={() => (selRec = null)}>{$t('mapa.cerrar')}</button>
+        <label for="r-motivo">{$t('resol.motivo')}</label>
+        <textarea id="r-motivo" name="motivo" bind:value={rMotivo} placeholder={$t('resol.motivo_ph')}></textarea>
+
+        <label for="r-fuente">{$t('resol.fuente')}</label>
+        <input id="r-fuente" name="fuente" type="text" bind:value={rFuente} placeholder={$t('resol.fuente_ph')} />
+
+        <label for="r-contacto">{$t('resol.contacto')}</label>
+        <input id="r-contacto" name="contacto" type="text" bind:value={rContacto} />
+
+        <!-- honeypot: oculto a humanos; si un bot lo rellena, se descarta -->
+        <input class="hp" tabindex="-1" autocomplete="off" name="website" bind:value={rHoney} aria-hidden="true" />
+
+        {#if rError}<p class="aviso-error">{rError}</p>{/if}
+        <button class="btn-ok btn-bloque btn-grande" on:click={enviarResol} disabled={rEnviando}>
+          {rEnviando ? $t('resol.enviando') : $t('resol.enviar')}
+        </button>
+        <button class="btn-bloque" on:click={cerrarResol}>{$t('resol.cancelar')}</button>
+      {/if}
     </div>
   </div>
 {/if}
@@ -237,7 +264,6 @@
   .cab h1 { font-size: 1.25rem; margin: 0; }
   .actualizar { white-space: nowrap; }
 
-  /* KPIs de conciencia situacional */
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 0.6rem 0; }
   .kpi { background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); padding: 0.5rem 0.7rem; box-shadow: var(--sombra); }
   .kpi .n { display: block; font-size: 1.5rem; font-weight: 800; line-height: 1; }
@@ -245,10 +271,9 @@
   .k-rojo .n { color: var(--rojo); }
   .k-verde .n { color: var(--verde); }
 
-  /* Filtros */
   .filtros { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.6rem; }
   .buscar { width: 100%; }
-  .tipo { display: flex; gap: 0; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
+  .tipo { display: flex; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
   .tipo button { flex: 1; border: none; border-radius: 0; background: #fff; min-height: 42px; font-weight: 600; }
   .tipo button.on { background: var(--azul); color: #fff; }
   .selects { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; }
@@ -263,7 +288,6 @@
   .cache { margin: 0; }
 
   .cuerpo { display: block; }
-  .lista { display: block; }
   .aviso-sector { background: var(--gris-claro); color: var(--gris); font-size: 0.78rem; padding: 0.4rem 0.6rem; border-radius: var(--radio); margin: 0 0 0.6rem; }
   .item { display: block; width: 100%; text-align: left; cursor: pointer; }
   .item.prioritario { border-color: var(--rojo); border-width: 2px; }
@@ -277,7 +301,6 @@
   .desc { margin: 0.3rem 0 0; color: var(--texto); }
   .ayuda { color: var(--gris); }
 
-  /* Desktop: lista al costado + mapa a la derecha, mapa pegajoso */
   @media (min-width: 900px) {
     .cuerpo { display: grid; grid-template-columns: 360px 1fr; gap: 0.9rem; align-items: start; }
     .lista { max-height: calc(100vh - 188px); overflow-y: auto; padding-right: 0.3rem; }
@@ -287,6 +310,7 @@
 
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 40; }
   .hoja { background: #fff; width: 100%; max-width: 640px; border-radius: 16px 16px 0 0; padding: 1.1rem; max-height: 85vh; overflow: auto; }
-  .ayudar { margin: 0.8rem 0; }
-  .ayudar summary { font-weight: 700; cursor: pointer; padding: 0.4rem 0; }
+  .r-sector { font-weight: 700; margin: 0.2rem 0 0.6rem; }
+  .r-intro { color: var(--gris); margin: 0 0 0.4rem; }
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 </style>

@@ -100,6 +100,25 @@ const diccionarios = {
     'filtro.urg_todas': 'Toda urgencia',
     'filtro.estado_todos': 'Todo estado',
     'filtro.limpiar': 'Limpiar filtros',
+    // Acciones en el popup del mapa
+    'pmapa.pop_confirmar': 'Confirmar que es real',
+    'pmapa.pop_resuelto': 'Marcar como resuelto',
+    'pmapa.confirmado_ok': 'Gracias. Confirmado.',
+    // Formulario "¿Resuelto?" (avisa a un coordinador por correo)
+    'resol.titulo': '¿Marcar como resuelto?',
+    'resol.intro': 'Esto avisa a un coordinador para que lo revise y lo cierre. Cuéntanos brevemente:',
+    'resol.motivo': '¿Por qué crees que está resuelto?',
+    'resol.motivo_ph': 'Ej.: ya fue atendido, las personas fueron rescatadas, el recurso ya no está…',
+    'resol.fuente': '¿Cómo lo sabes?',
+    'resol.fuente_ph': 'Ej.: lo vi en persona, me lo dijo un familiar…',
+    'resol.contacto': 'Tu contacto (opcional, para seguimiento)',
+    'resol.enviar': 'Enviar a un coordinador',
+    'resol.enviando': 'Enviando…',
+    'resol.ok': 'Gracias. Un coordinador lo revisará y lo cerrará si procede.',
+    'resol.error': 'No se pudo enviar. Intenta de nuevo en un momento.',
+    'resol.espera': 'Espera un momento antes de enviar otra solicitud.',
+    'resol.falta': 'Cuéntanos al menos por qué crees que está resuelto.',
+    'resol.cancelar': 'Cancelar',
 
     // Vista pública del mapa (§22.7-2)
     'mapa.titulo': 'Necesidades cerca de ti',

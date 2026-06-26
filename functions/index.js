@@ -78,6 +78,63 @@ export const solicitarCoordinador = onCall(
   }
 );
 
+// === Solicitud de "Resuelto" → email al coordinador (sin tocar datos) =======
+// Callable: un usuario propone que un punto ya está resuelto. NO cambia el estado
+// (eso solo lo hace un coordinador desde el Panel); solo NOTIFICA por correo con
+// los detalles + las respuestas de validación. App Check obligatorio + rate-limit.
+export const solicitarResolucion = onCall(
+  { secrets: [RESEND_API_KEY], enforceAppCheck: true, region: 'us-central1', cors: true },
+  async (req) => {
+    const d = req.data || {};
+    const id = limpio(d.id, 60);
+    if (!id) throw new HttpsError('invalid-argument', 'Falta el id del punto.');
+    const sector = limpio(d.sector, 160);
+    const categoria = limpio(d.categoria, 40);
+    const urgencia = limpio(d.urgencia, 20);
+    const descripcion = limpio(d.descripcion, 500);
+    const motivo = limpio(d.motivo, 200);     // ¿por qué cree que está resuelto?
+    const fuente = limpio(d.fuente, 120);      // ¿cómo lo sabe?
+    const contacto = limpio(d.contacto, 120);  // opcional, para seguimiento
+    const url = limpio(d.url, 200);
+    const uid = req.auth?.uid || 'anon';
+
+    // Rate-limit server-side: 1 solicitud por uid cada 60s (anti-spam, defensa real).
+    const marca = db.collection('_ratelimit_resolucion').doc(uid);
+    const prev = await marca.get();
+    const ahora = Date.now();
+    if (prev.exists && ahora - (prev.data().ts || 0) < 60000) {
+      throw new HttpsError('resource-exhausted', 'Espera un momento antes de reenviar.');
+    }
+    await marca.set({ ts: ahora });
+
+    const html = `
+      <h2>¿Punto resuelto? — revisar y cerrar</h2>
+      <p>Un usuario reporta que este punto ya está resuelto. Revísalo y, si procede, márcalo resuelto desde el Panel de coordinación.</p>
+      <ul>
+        <li><b>Punto:</b> ${sector || '—'}</li>
+        <li><b>Categoría:</b> ${categoria || '—'} · <b>Urgencia:</b> ${urgencia || '—'}</li>
+        <li><b>Descripción:</b> ${descripcion || '—'}</li>
+        <li><b>¿Por qué está resuelto?:</b> ${motivo || '—'}</li>
+        <li><b>¿Cómo lo sabe?:</b> ${fuente || '—'}</li>
+        <li><b>Contacto del reportante:</b> ${contacto || '—'}</li>
+        <li><b>id:</b> ${id}</li>
+        <li><b>Enlace al punto:</b> <a href="${url}">${url || '—'}</a></li>
+        <li><b>uid:</b> ${uid}</li>
+      </ul>`;
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${RESEND_API_KEY.value()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: REMITENTE, to: [DESTINO], subject: `¿Resuelto? ${sector || id}`, html })
+    });
+    if (!res.ok) {
+      logger.error('Resend (resolucion) falló', res.status, await res.text());
+      throw new HttpsError('internal', 'No se pudo enviar el correo.');
+    }
+    return { ok: true };
+  }
+);
+
 // === Validación por multitud: contador + transición de estado =============
 // Trigger al crear una confirmación. (§22.5)
 export const onConfirmacion = onDocumentCreated(
