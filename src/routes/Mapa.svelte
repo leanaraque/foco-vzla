@@ -81,7 +81,9 @@
   }
 
   onMount(async () => {
-    if (!demo) asegurarSesionAnonima().catch(() => {});
+    // Esperar la sesión anónima ANTES de leer: `recursos` exige isSignedIn en las
+    // rules; sin await, la primera carga en frío puede no traer recursos hasta refrescar.
+    if (!demo) { try { await asegurarSesionAnonima(); } catch (_) { /* sigue: necesidades es read público */ } }
     await cargar(false);
   });
 </script>

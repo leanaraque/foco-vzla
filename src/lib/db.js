@@ -157,7 +157,7 @@ export function suscribirRecursos(cb) {
 // = a lo sumo 1 página por carga/refresco, y las relecturas salen de caché.
 // `pendiente_revision` (aislado) se prioriza en la UI; aquí traemos la página
 // reciente y la UI lo ordena al frente (salvaguarda §22.5: más visible, no menos).
-export async function leerNecesidadesPublicas({ forzarServidor = false, demo = false, max = 250 } = {}) {
+export async function leerNecesidadesPublicas({ forzarServidor = false, demo = false, max = 2000 } = {}) {
   // `max` mayor que el panel: el mapa público debe mostrar TODAS las necesidades
   // (no solo una página), y el buscador filtra sobre lo cargado. Sigue siendo una
   // lectura puntual con caché-primero (no listener) → costo acotado (§6.2-r1).
@@ -205,7 +205,7 @@ export async function exportarNecesidadesCsv({ limite = 2000 } = {}) {
 
 // Recursos públicos para el mapa unificado (cache-first, sin listener). Mismo
 // patrón de costo que las necesidades. Requiere sesión (rules: read if isSignedIn).
-export async function leerRecursosPublicos({ forzarServidor = false, max = 250 } = {}) {
+export async function leerRecursosPublicos({ forzarServidor = false, max = 2000 } = {}) {
   const q = query(collection(db, 'recursos'), where('disponible', '==', true), orderBy('creada_en', 'desc'), limit(max));
   if (!forzarServidor) {
     try {
