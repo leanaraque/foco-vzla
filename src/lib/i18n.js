@@ -84,6 +84,23 @@ const diccionarios = {
     'intro.panel': 'Acceso para coordinadores verificados. ¿Coordinas ayuda? Postúlate abajo.',
     'intro.recursos': 'Ofrece lo que tengas (agua, transporte, refugio…) para que un vecino lo encuentre.',
 
+    // Panel operativo de mapa (lista + mapa + filtros, principios de mapas de ops)
+    'pmapa.titulo': 'Mapa de ayuda',
+    'pmapa.intro': 'Todas las necesidades y recursos en un solo lugar. Filtra para encontrar dónde actuar.',
+    'pmapa.kpi_critica': 'Críticas / rescate',
+    'pmapa.kpi_sin_atender': 'Sin atender',
+    'pmapa.kpi_recursos': 'Recursos',
+    'pmapa.mostrando': 'Mostrando',
+    'pmapa.recurso': 'Recurso',
+    'pmapa.sin_resultados': 'Sin resultados para estos filtros.',
+    'filtro.tipo_todo': 'Todo',
+    'filtro.tipo_nec': 'Necesidades',
+    'filtro.tipo_rec': 'Recursos',
+    'filtro.cat_todas': 'Todas las categorías',
+    'filtro.urg_todas': 'Toda urgencia',
+    'filtro.estado_todos': 'Todo estado',
+    'filtro.limpiar': 'Limpiar filtros',
+
     // Vista pública del mapa (§22.7-2)
     'mapa.titulo': 'Necesidades cerca de ti',
     'mapa.lista': 'Lista',

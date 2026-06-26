@@ -1,5 +1,9 @@
 <script>
-  import { onMount } from 'svelte';
+  // PANEL OPERATIVO de ayuda (§22 + principios de mapas de organismos de respuesta:
+  // conciencia situacional, semántica de color consistente, triaje, capas/filtros,
+  // estado por incidente, vigencia del dato). Presentación pura: consume db.js
+  // (read-only). Reutiliza MapaUnificado (no lo modifica). Mobile-first.
+  import { onMount, onDestroy } from 'svelte';
   import { t } from '../lib/i18n.js';
   import { normaliza } from '../lib/autocomplete.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
@@ -8,156 +12,195 @@
 
   const demo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
-  let items = [];
-  let recursos = [];
-  let busca = '';   // texto del buscador
-  let origen = '';
-  let cargando = true;
-  let vista = 'lista'; // 'lista' | 'mapa'
+  let items = [], recursos = [], origen = '', cargando = true;
+  let vista = 'lista';            // toggle SOLO en móvil: 'lista' | 'mapa'
+  let esDesktop = false;          // en desktop se ven lista y mapa a la vez
 
-  // Filtro del buscador (cliente, insensible a acentos): sector, descripción,
-  // categoría y urgencia. La lista y el mapa usan los items filtrados.
-  $: filtrados = (() => {
-    const q = normaliza(busca);
-    if (q.length < 2) return items;
-    return items.filter((n) =>
-      normaliza(`${n.sector} ${n.descripcion} ${n.categoria} ${n.urgencia}`).includes(q)
-    );
-  })();
-  let seleccion = null; // necesidad abierta en el detalle
-  let confirmadas = {}; // id → bool (si este usuario ya confirmó)
-  let confirmando = false;
-  let cooldown = false;
+  // --- Filtros (control de capas + triaje) ---
+  let busca = '', fTipo = 'todo', fCat = '', fUrg = '', fEstado = '';
+  const categorias = ['rescate', 'medico', 'agua', 'alimento', 'refugio', 'transporte', 'acopio', 'servicios', 'otro'];
+  const urgencias = ['critica', 'alta', 'media'];
+  const estados = ['sin_atender', 'asignada', 'resuelta'];
+  const limpiar = () => { busca = ''; fTipo = 'todo'; fCat = ''; fUrg = ''; fEstado = ''; };
 
-  // Salvaguarda §22.5: el aislado (pendiente_revision) va SIEMPRE primero y MÁS
-  // visible; luego por recencia. Nunca se filtra ni se oculta.
-  function ordenar(arr) {
+  const qn = (s) => normaliza(s || '');
+  $: q = qn(busca);
+  const txt = (s) => q.length < 2 || qn(s).includes(q);
+
+  // Triaje (§22.5): el aislado (pendiente_revision) va SIEMPRE primero; luego rescate
+  // activo, luego urgencia, luego recencia. Conciencia situacional: lo grave arriba.
+  const ordU = { critica: 0, alta: 1, media: 2 };
+  function triar(arr) {
     const peso = (n) => (n.verificacion === 'pendiente_revision' ? 0 : 1);
-    return [...arr].sort((a, b) => {
-      const d = peso(a) - peso(b);
-      if (d !== 0) return d;
-      return (b.creada_en?.seconds || 0) - (a.creada_en?.seconds || 0);
-    });
+    return [...arr].sort((a, b) =>
+      peso(a) - peso(b)
+      || ((b.rescate_activo === true) - (a.rescate_activo === true))
+      || (ordU[a.urgencia] ?? 3) - (ordU[b.urgencia] ?? 3)
+      || (b.creada_en?.seconds || 0) - (a.creada_en?.seconds || 0)
+    );
+  }
+
+  $: necFiltradas = (fTipo === 'rec') ? [] : triar(items.filter((n) =>
+    (!fCat || n.categoria === fCat) &&
+    (!fUrg || n.urgencia === fUrg) &&
+    (!fEstado || (n.estado || 'sin_atender') === fEstado) &&
+    txt(`${n.sector} ${n.descripcion} ${n.categoria} ${n.urgencia}`)
+  ));
+  // Los recursos no tienen urgencia/estado de incidente → se ocultan si se filtra por eso.
+  $: recFiltrados = (fTipo === 'nec' || fUrg || fEstado) ? [] : recursos.filter((r) =>
+    (!fCat || r.categoria === fCat) && txt(`${r.sector} ${r.descripcion} ${r.categoria}`)
+  );
+  $: totalMostrado = necFiltradas.length + recFiltrados.length;
+
+  // KPIs de conciencia situacional (sobre el total, no lo filtrado).
+  $: kCritica = items.filter((n) => n.rescate_activo === true || n.urgencia === 'critica').length;
+  $: kSinAtender = items.filter((n) => (n.estado || 'sin_atender') === 'sin_atender').length;
+  $: kRecursos = recursos.length;
+
+  $: mapaAlto = esDesktop ? 'calc(100vh - 188px)' : '58vh';
+
+  // --- detalle ---
+  let seleccion = null, selRec = null, confirmadas = {}, confirmando = false, cooldown = false;
+  async function abrir(n) { selRec = null; seleccion = n; if (!demo) confirmadas[n.id] = await yaConfirme(n.id); }
+  function abrirRec(r) { seleccion = null; selRec = r; }
+  async function confirmar() {
+    if (!seleccion || demo) return;
+    confirmando = true;
+    try { await confirmarNecesidad(seleccion.id); confirmadas[seleccion.id] = true; confirmadas = { ...confirmadas }; }
+    catch (_) { confirmadas[seleccion.id] = true; }
+    finally { confirmando = false; }
   }
 
   async function cargar(forzarServidor = false) {
     cargando = true;
     try {
       const r = await leerNecesidadesPublicas({ forzarServidor, demo });
-      items = ordenar(r.items);
-      origen = r.origen;
-      // Recursos en el mismo mapa (no en modo demo).
+      items = r.items; origen = r.origen;
       if (!demo) recursos = await leerRecursosPublicos({ forzarServidor }).catch(() => []);
-    } finally {
-      cargando = false;
-    }
+    } finally { cargando = false; }
   }
-
   async function actualizar() {
-    if (cooldown) return;
-    cooldown = true;
-    await cargar(true);
-    setTimeout(() => (cooldown = false), 15000); // cooldown anti-abuso de lecturas
+    if (cooldown) return; cooldown = true; await cargar(true);
+    setTimeout(() => (cooldown = false), 15000); // anti-abuso de lecturas
   }
 
-  async function abrir(n) {
-    seleccion = n;
-    if (!demo) confirmadas[n.id] = await yaConfirme(n.id);
-  }
-
-  async function confirmar() {
-    if (!seleccion || demo) return;
-    confirmando = true;
-    try {
-      await confirmarNecesidad(seleccion.id);
-      confirmadas[seleccion.id] = true;
-      confirmadas = { ...confirmadas };
-    } catch (_) {
-      // si ya confirmó o falla, lo reflejamos como confirmado igualmente
-      confirmadas[seleccion.id] = true;
-    } finally {
-      confirmando = false;
-    }
-  }
-
+  let mq;
   onMount(async () => {
-    // Esperar la sesión anónima ANTES de leer: `recursos` exige isSignedIn en las
-    // rules; sin await, la primera carga en frío puede no traer recursos hasta refrescar.
-    if (!demo) { try { await asegurarSesionAnonima(); } catch (_) { /* sigue: necesidades es read público */ } }
+    mq = window.matchMedia('(min-width: 900px)');
+    esDesktop = mq.matches;
+    mq.addEventListener('change', (e) => (esDesktop = e.matches));
+    if (!demo) { try { await asegurarSesionAnonima(); } catch (_) { /* necesidades es público */ } }
     await cargar(false);
   });
+  onDestroy(() => mq && mq.removeEventListener && mq.removeEventListener('change', () => {}));
 </script>
 
-<div class="contenedor">
-  <h1>{$t('mapa.titulo')}</h1>
-  <p class="intro">{$t('intro.mapa')}</p>
-  <p class="ayuda sector">🛈 {$t('mapa.sector_aviso')}</p>
-
-  <div class="barra">
-    <div class="toggle">
-      <button class:activo={vista === 'lista'} on:click={() => (vista = 'lista')}>{$t('mapa.lista')}</button>
-      <button class:activo={vista === 'mapa'} on:click={() => (vista = 'mapa')}>{$t('mapa.mapa')}</button>
-    </div>
+<div class="panel">
+  <header class="cab">
+    <h1>{$t('pmapa.titulo')}</h1>
     <button class="actualizar" on:click={actualizar} disabled={cooldown || cargando}>
       {cargando ? $t('mapa.actualizando') : $t('mapa.actualizar')}
     </button>
+  </header>
+
+  <!-- Conciencia situacional: KPIs del total -->
+  <div class="kpis">
+    <div class="kpi k-rojo"><span class="n">{kCritica}</span><span class="l">{$t('pmapa.kpi_critica')}</span></div>
+    <div class="kpi"><span class="n">{kSinAtender}</span><span class="l">{$t('pmapa.kpi_sin_atender')}</span></div>
+    <div class="kpi k-verde"><span class="n">{kRecursos}</span><span class="l">{$t('pmapa.kpi_recursos')}</span></div>
   </div>
 
-  <div class="buscador">
-    <input type="search" bind:value={busca} placeholder={$t('mapa.buscar_ph')} aria-label={$t('mapa.buscar_ph')} />
-    {#if busca.length >= 2}
-      <span class="buscador-n">{filtrados.length} / {items.length}</span>
+  <!-- Control de capas + filtros -->
+  <div class="filtros">
+    <input class="buscar" name="buscar" type="search" bind:value={busca} placeholder={$t('mapa.buscar_ph')} aria-label={$t('mapa.buscar_ph')} />
+    <div class="tipo" role="group" aria-label="tipo">
+      <button class:on={fTipo === 'todo'} on:click={() => (fTipo = 'todo')}>{$t('filtro.tipo_todo')}</button>
+      <button class:on={fTipo === 'nec'} on:click={() => (fTipo = 'nec')}>{$t('filtro.tipo_nec')}</button>
+      <button class:on={fTipo === 'rec'} on:click={() => (fTipo = 'rec')}>{$t('filtro.tipo_rec')}</button>
+    </div>
+    <div class="selects">
+      <select name="cat" bind:value={fCat} aria-label={$t('filtro.cat_todas')}>
+        <option value="">{$t('filtro.cat_todas')}</option>
+        {#each categorias as c}<option value={c}>{$t('cat.' + c)}</option>{/each}
+      </select>
+      <select name="urg" bind:value={fUrg} disabled={fTipo === 'rec'} aria-label={$t('filtro.urg_todas')}>
+        <option value="">{$t('filtro.urg_todas')}</option>
+        {#each urgencias as u}<option value={u}>{$t('urg.' + u)}</option>{/each}
+      </select>
+      <select name="estado" bind:value={fEstado} disabled={fTipo === 'rec'} aria-label={$t('filtro.estado_todos')}>
+        <option value="">{$t('filtro.estado_todos')}</option>
+        {#each estados as e}<option value={e}>{$t('estado.' + e)}</option>{/each}
+      </select>
+    </div>
+    <div class="meta">
+      <span class="cuenta">{$t('pmapa.mostrando')} <b>{totalMostrado}</b></span>
+      <button class="link" on:click={limpiar}>{$t('filtro.limpiar')}</button>
+      <!-- toggle SOLO móvil -->
+      <div class="toggle">
+        <button class:on={vista === 'lista'} on:click={() => (vista = 'lista')}>{$t('mapa.lista')}</button>
+        <button class:on={vista === 'mapa'} on:click={() => (vista = 'mapa')}>{$t('mapa.mapa')}</button>
+      </div>
+    </div>
+    {#if origen === 'cache'}<p class="ayuda cache">{$t('mapa.desde_cache')}</p>{/if}
+  </div>
+
+  <div class="cuerpo">
+    <!-- LISTA (aside en desktop; en móvil según toggle) -->
+    {#if esDesktop || vista === 'lista'}
+      <aside class="lista">
+        <p class="aviso-sector">{$t('mapa.sector_aviso')}</p>
+        {#if cargando && items.length === 0}
+          <p class="ayuda">…</p>
+        {:else if totalMostrado === 0}
+          <p class="ayuda">{$t('pmapa.sin_resultados')}</p>
+        {:else}
+          {#each necFiltradas as n (n.id)}
+            <button class="tarjeta item {n.verificacion === 'pendiente_revision' ? 'prioritario' : ''}" on:click={() => abrir(n)}>
+              {#if n.verificacion === 'pendiente_revision'}<div class="badge-prio">{$t('mapa.revisar')}</div>{/if}
+              <div class="tarjeta-row">
+                <span class="tag tag-u-{n.urgencia}">{$t('urg.' + n.urgencia)}</span>
+                <span class="tag">{$t('cat.' + n.categoria)}</span>
+                <span class="tag tag-{(n.estado || 'sin_atender')}">{$t('estado.' + (n.estado || 'sin_atender'))}</span>
+                {#if n.confirmaciones}<span class="tag">{n.confirmaciones} {$t('mapa.confirmaciones')}</span>{/if}
+              </div>
+              <div class="sector-txt">{n.sector}</div>
+              {#if n.descripcion}<p class="desc">{n.descripcion}</p>{/if}
+            </button>
+          {/each}
+          {#each recFiltrados as r (r.id)}
+            <button class="tarjeta item item-rec" on:click={() => abrirRec(r)}>
+              <div class="tarjeta-row">
+                <span class="tag tag-rec">{$t('pmapa.recurso')}</span>
+                <span class="tag">{$t('cat.' + r.categoria)}</span>
+              </div>
+              <div class="sector-txt">{r.sector}</div>
+              {#if r.descripcion}<p class="desc">{r.descripcion}</p>{/if}
+            </button>
+          {/each}
+        {/if}
+      </aside>
+    {/if}
+
+    <!-- MAPA (a la derecha en desktop; en móvil según toggle, montado fresco) -->
+    {#if esDesktop || vista === 'mapa'}
+      <div class="mapa-col">
+        <MapaUnificado necesidades={necFiltradas} recursos={recFiltrados} alto={mapaAlto} />
+      </div>
     {/if}
   </div>
-
-  {#if origen === 'cache'}
-    <p class="ayuda">{$t('mapa.desde_cache')}</p>
-  {/if}
-
-  {#if cargando && items.length === 0}
-    <p class="ayuda">…</p>
-  {:else if items.length === 0}
-    <p class="ayuda">{$t('mapa.vacio')}</p>
-  {:else if vista === 'mapa'}
-    <MapaUnificado necesidades={filtrados} {recursos} />
-  {:else if filtrados.length === 0}
-    <p class="ayuda">{$t('mapa.sin_resultados')}</p>
-  {:else}
-    {#each filtrados as n (n.id)}
-      <button class="tarjeta item {n.verificacion === 'pendiente_revision' ? 'prioritario' : ''}" on:click={() => abrir(n)}>
-        {#if n.verificacion === 'pendiente_revision'}
-          <div class="badge-prio">★ {$t('mapa.revisar')}</div>
-        {/if}
-        <div class="tarjeta-row">
-          <span class="tag tag-u-{n.urgencia}">{$t('urg.' + n.urgencia)}</span>
-          <span class="tag">{$t('cat.' + n.categoria)}</span>
-          <span class="tag {n.verificacion === 'confirmada' || n.verificacion === 'verificada' ? 'tag-verif' : 'tag-noverif'}">
-            {$t('verif.' + n.verificacion)}
-          </span>
-          {#if n.confirmaciones}
-            <span class="tag">✓ {n.confirmaciones} {$t('mapa.confirmaciones')}</span>
-          {/if}
-        </div>
-        <div class="sector-txt">📍 {n.sector}</div>
-        {#if n.descripcion}<p class="desc">{n.descripcion}</p>{/if}
-      </button>
-    {/each}
-  {/if}
 </div>
 
+<!-- Detalle de NECESIDAD (con confirmación) -->
 {#if seleccion}
   <div class="overlay" on:click={() => (seleccion = null)} role="presentation">
     <div class="hoja" on:click|stopPropagation role="dialog" aria-modal="true">
       <div class="tarjeta-row">
         <span class="tag tag-u-{seleccion.urgencia}">{$t('urg.' + seleccion.urgencia)}</span>
         <span class="tag">{$t('cat.' + seleccion.categoria)}</span>
-        <span class="tag {seleccion.verificacion === 'confirmada' || seleccion.verificacion === 'verificada' ? 'tag-verif' : 'tag-noverif'}">
-          {$t('verif.' + seleccion.verificacion)}
-        </span>
+        <span class="tag tag-{(seleccion.estado || 'sin_atender')}">{$t('estado.' + (seleccion.estado || 'sin_atender'))}</span>
       </div>
-      <h2>📍 {seleccion.sector}</h2>
+      <h2>{seleccion.sector}</h2>
       {#if seleccion.descripcion}<p>{seleccion.descripcion}</p>{/if}
-
       {#if !demo}
         {#if confirmadas[seleccion.id]}
           <p class="aviso-ok">{$t('mapa.ya_confirmaste')}</p>
@@ -167,35 +210,83 @@
           </button>
         {/if}
       {/if}
-
-      <details class="ayudar">
-        <summary>{$t('mapa.como_ayudar')}</summary>
-        <p>{$t('mapa.como_ayudar_texto')}</p>
-      </details>
-
+      <details class="ayudar"><summary>{$t('mapa.como_ayudar')}</summary><p>{$t('mapa.como_ayudar_texto')}</p></details>
       <button class="btn-bloque" on:click={() => (seleccion = null)}>{$t('mapa.cerrar')}</button>
     </div>
   </div>
 {/if}
 
+<!-- Detalle de RECURSO (informativo) -->
+{#if selRec}
+  <div class="overlay" on:click={() => (selRec = null)} role="presentation">
+    <div class="hoja" on:click|stopPropagation role="dialog" aria-modal="true">
+      <div class="tarjeta-row">
+        <span class="tag tag-rec">{$t('pmapa.recurso')}</span>
+        <span class="tag">{$t('cat.' + selRec.categoria)}</span>
+      </div>
+      <h2>{selRec.sector}</h2>
+      {#if selRec.descripcion}<p>{selRec.descripcion}</p>{/if}
+      <button class="btn-bloque" on:click={() => (selRec = null)}>{$t('mapa.cerrar')}</button>
+    </div>
+  </div>
+{/if}
+
 <style>
-  .intro { color: var(--gris); margin: 0 0 0.4rem; }
-  .sector { background: var(--gris-claro); padding: 0.4rem 0.6rem; border-radius: var(--radio); }
-  .barra { display: flex; gap: 0.5rem; align-items: center; margin: 0.6rem 0; }
-  .toggle { display: flex; gap: 0.4rem; flex: 1; }
-  .toggle button { flex: 1; }
-  .toggle button.activo { background: var(--azul); color: #fff; }
+  .panel { max-width: 1280px; margin: 0 auto; padding: 0.7rem 0.8rem 4rem; }
+  .cab { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }
+  .cab h1 { font-size: 1.25rem; margin: 0; }
   .actualizar { white-space: nowrap; }
-  .buscador { position: relative; margin-bottom: 0.7rem; }
-  .buscador input { width: 100%; padding-right: 3.5rem; }
-  .buscador-n { position: absolute; right: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--gris); font-size: 0.8rem; font-weight: 600; }
+
+  /* KPIs de conciencia situacional */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 0.6rem 0; }
+  .kpi { background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); padding: 0.5rem 0.7rem; box-shadow: var(--sombra); }
+  .kpi .n { display: block; font-size: 1.5rem; font-weight: 800; line-height: 1; }
+  .kpi .l { font-size: 0.76rem; color: var(--gris); }
+  .k-rojo .n { color: var(--rojo); }
+  .k-verde .n { color: var(--verde); }
+
+  /* Filtros */
+  .filtros { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.6rem; }
+  .buscar { width: 100%; }
+  .tipo { display: flex; gap: 0; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
+  .tipo button { flex: 1; border: none; border-radius: 0; background: #fff; min-height: 42px; font-weight: 600; }
+  .tipo button.on { background: var(--azul); color: #fff; }
+  .selects { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; }
+  .selects select { min-height: 42px; padding: 0.4rem 0.5rem; }
+  .meta { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+  .cuenta { color: var(--gris); font-size: 0.85rem; }
+  .cuenta b { color: var(--texto); }
+  .link { background: none; border: none; color: var(--azul); font-weight: 600; padding: 0; min-height: 0; font-size: 0.85rem; }
+  .toggle { display: flex; gap: 0.3rem; margin-left: auto; }
+  .toggle button { padding: 0.4rem 0.8rem; min-height: 0; }
+  .toggle button.on { background: var(--azul); color: #fff; }
+  .cache { margin: 0; }
+
+  .cuerpo { display: block; }
+  .lista { display: block; }
+  .aviso-sector { background: var(--gris-claro); color: var(--gris); font-size: 0.78rem; padding: 0.4rem 0.6rem; border-radius: var(--radio); margin: 0 0 0.6rem; }
   .item { display: block; width: 100%; text-align: left; cursor: pointer; }
   .item.prioritario { border-color: var(--rojo); border-width: 2px; }
-  .badge-prio { background: var(--rojo); color: #fff; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.5rem; border-radius: 999px; display: inline-block; margin-bottom: 0.4rem; }
+  .item-rec { border-left: 4px solid var(--verde); }
+  .badge-prio { background: var(--rojo); color: #fff; font-weight: 700; font-size: 0.76rem; padding: 0.2rem 0.5rem; border-radius: 999px; display: inline-block; margin-bottom: 0.4rem; }
+  .tag-rec { background: var(--verde); color: #fff; }
+  .tag-sin_atender { background: var(--gris-claro); color: var(--gris); }
+  .tag-asignada { background: #dbeafe; color: #1666a0; }
+  .tag-resuelta { background: #dcfce7; color: #166534; }
   .sector-txt { font-weight: 600; }
-  .desc { margin: 0.3rem 0 0; }
+  .desc { margin: 0.3rem 0 0; color: var(--texto); }
+  .ayuda { color: var(--gris); }
+
+  /* Desktop: lista al costado + mapa a la derecha, mapa pegajoso */
+  @media (min-width: 900px) {
+    .cuerpo { display: grid; grid-template-columns: 360px 1fr; gap: 0.9rem; align-items: start; }
+    .lista { max-height: calc(100vh - 188px); overflow-y: auto; padding-right: 0.3rem; }
+    .mapa-col { position: sticky; top: 0.7rem; }
+    .toggle { display: none; }
+  }
+
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: flex-end; justify-content: center; z-index: 40; }
-  .hoja { background: #fff; width: 100%; max-width: 720px; border-radius: 16px 16px 0 0; padding: 1.1rem; max-height: 85vh; overflow:auto; }
+  .hoja { background: #fff; width: 100%; max-width: 640px; border-radius: 16px 16px 0 0; padding: 1.1rem; max-height: 85vh; overflow: auto; }
   .ayudar { margin: 0.8rem 0; }
   .ayudar summary { font-weight: 700; cursor: pointer; padding: 0.4rem 0; }
 </style>
