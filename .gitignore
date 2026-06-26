@@ -14,3 +14,7 @@ coverage/
 
 # Datos fuente del operador (no al repo público)
 *.csv
+
+# Backups y artefactos de datos (contienen subdocs privados: contacto de víctimas)
+backups/
+*.bak.json
