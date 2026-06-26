@@ -4,7 +4,7 @@
   import { user, esCoordinador, authListo, entrarCoordinador, salir } from '../lib/stores.js';
   import { suscribirNecesidades } from '../lib/db.js';
   import NeedCard from '../components/NeedCard.svelte';
-  import MapView from '../components/MapView.svelte';
+  import MapaUnificado from '../components/MapaUnificado.svelte';
   import CoordinatorForm from '../components/CoordinatorForm.svelte';
 
   const categorias = ['rescate', 'medico', 'agua', 'alimento', 'refugio', 'otro'];
@@ -108,7 +108,7 @@
 
     {#if vista === 'mapa'}
       {#if items.length}
-        <MapView {items} />
+        <MapaUnificado necesidades={items} />
       {:else}
         <p class="ayuda">{$t('panel.vacio')}</p>
       {/if}

@@ -130,19 +130,20 @@
   :global(body) { padding-bottom: 3.5rem; }
   main { padding-bottom: 0.5rem; }
 
-  /* Footer en FLUJO normal (no fijo): aparece al final del contenido, sobre la
-     tabbar, y nunca se superpone a los mapas (antes era fixed y los tapaba). */
+  /* Footer en FLUJO normal (no fijo) y DISCRETO: links sobrios al final del
+     contenido, sin competir con los mapas (antes era fixed y se veía pesado). */
   .pie {
-    display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap;
-    background: var(--bg); border-top: 1px solid var(--borde);
-    padding: 0.7rem 0.6rem; margin-top: 1rem;
+    display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;
+    border-top: 1px solid var(--borde);
+    padding: 0.9rem 0.6rem 1.1rem; margin-top: 1.5rem;
   }
   .pie-btn {
     display: inline-flex; align-items: center; gap: 0.3rem;
-    background: #fff; border: 1px solid var(--borde); border-radius: 999px;
-    padding: 0.35rem 0.7rem; font-size: 0.82rem; font-weight: 600;
-    color: var(--azul); text-decoration: none; min-height: 0; cursor: pointer;
+    background: none; border: none; padding: 0.2rem 0;
+    font-size: 0.82rem; font-weight: 600; color: var(--gris);
+    text-decoration: none; min-height: 0; cursor: pointer;
   }
+  .pie-btn:hover { color: var(--azul); }
   .pie-btn:active { transform: translateY(1px); }
   .pie-btn[disabled] { opacity: 0.6; }
   .tabbar {

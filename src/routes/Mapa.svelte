@@ -3,12 +3,13 @@
   import { t } from '../lib/i18n.js';
   import { normaliza } from '../lib/autocomplete.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
-  import { leerNecesidadesPublicas, confirmarNecesidad, yaConfirme } from '../lib/db.js';
-  import MapView from '../components/MapView.svelte';
+  import { leerNecesidadesPublicas, leerRecursosPublicos, confirmarNecesidad, yaConfirme } from '../lib/db.js';
+  import MapaUnificado from '../components/MapaUnificado.svelte';
 
   const demo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
   let items = [];
+  let recursos = [];
   let busca = '';   // texto del buscador
   let origen = '';
   let cargando = true;
@@ -45,6 +46,8 @@
       const r = await leerNecesidadesPublicas({ forzarServidor, demo });
       items = ordenar(r.items);
       origen = r.origen;
+      // Recursos en el mismo mapa (no en modo demo).
+      if (!demo) recursos = await leerRecursosPublicos({ forzarServidor }).catch(() => []);
     } finally {
       cargando = false;
     }
@@ -114,7 +117,7 @@
   {:else if items.length === 0}
     <p class="ayuda">{$t('mapa.vacio')}</p>
   {:else if vista === 'mapa'}
-    <MapView items={filtrados} />
+    <MapaUnificado necesidades={filtrados} {recursos} />
   {:else if filtrados.length === 0}
     <p class="ayuda">{$t('mapa.sin_resultados')}</p>
   {:else}

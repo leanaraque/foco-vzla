@@ -2,9 +2,16 @@
   import { onDestroy } from 'svelte';
   import { t } from '../lib/i18n.js';
   import { online, asegurarSesionAnonima } from '../lib/stores.js';
-  import { crearRecurso, suscribirRecursos } from '../lib/db.js';
+  import { crearRecurso, suscribirRecursos, leerNecesidadesPublicas, leerRecursosPublicos } from '../lib/db.js';
   import LugarAutocomplete from '../components/LugarAutocomplete.svelte';
-  import MapaPin from '../components/MapaPin.svelte';
+  import MapaUnificado from '../components/MapaUnificado.svelte';
+
+  // Contexto del mapa (mismo mapa que /mapa): muestra lo existente al registrar.
+  let ctxNec = [], ctxRec = [];
+  (async () => {
+    try { const r = await leerNecesidadesPublicas({}); ctxNec = r.items; } catch (_) {}
+    try { ctxRec = await leerRecursosPublicos({}); } catch (_) {}
+  })();
 
   const categorias = ['agua', 'transporte', 'refugio', 'medico', 'alimento', 'otro'];
 
@@ -100,7 +107,7 @@
       {#if mostrarMapa}
         <div class="mapa-titulo">{$t('reportar.mapa_titulo')}</div>
         <p class="ayuda">{$t('reportar.mapa_ayuda')}</p>
-        <MapaPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} />
+        <MapaUnificado conPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} necesidades={ctxNec} recursos={ctxRec} alto="300px" />
         {#if pinLat != null}<p class="ayuda pin-ok">✓ {$t('reportar.mapa_marcado')}</p>{/if}
         <button type="button" class="enlace-ocultar" on:click={() => (mostrarMapa = false)}>
           {$t('reportar.mapa_ocultar')}

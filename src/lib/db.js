@@ -203,6 +203,24 @@ export async function exportarNecesidadesCsv({ limite = 2000 } = {}) {
   return { csv: filas.join('\r\n'), n: snap.size };
 }
 
+// Recursos públicos para el mapa unificado (cache-first, sin listener). Mismo
+// patrón de costo que las necesidades. Requiere sesión (rules: read if isSignedIn).
+export async function leerRecursosPublicos({ forzarServidor = false, max = 250 } = {}) {
+  const q = query(collection(db, 'recursos'), where('disponible', '==', true), orderBy('creada_en', 'desc'), limit(max));
+  if (!forzarServidor) {
+    try {
+      const cache = await getDocsFromCache(q);
+      if (!cache.empty) return cache.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (_) { /* sin caché → servidor */ }
+  }
+  try {
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (_) {
+    return [];
+  }
+}
+
 // Confirmación ciudadana (§22.5): el usuario crea SU confirmación (id == su uid).
 // Una sola vez por uid (lo enforcan las rules). El contador y la transición de
 // estado los hace la Cloud Function; aquí solo se registra el voto.

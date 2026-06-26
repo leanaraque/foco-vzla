@@ -1,9 +1,18 @@
 <script>
+  import { onMount } from 'svelte';
   import { t } from '../lib/i18n.js';
   import { online, asegurarSesionAnonima } from '../lib/stores.js';
-  import { crearNecesidad } from '../lib/db.js';
+  import { crearNecesidad, leerNecesidadesPublicas, leerRecursosPublicos } from '../lib/db.js';
   import LugarAutocomplete from '../components/LugarAutocomplete.svelte';
-  import MapaPin from '../components/MapaPin.svelte';
+  import MapaUnificado from '../components/MapaUnificado.svelte';
+
+  // Contexto del mapa: las necesidades/recursos ya cargados (caché-primero, barato)
+  // para que el mapa de reporte sea EL MISMO que el de /mapa (muestra lo existente).
+  let ctxNec = [], ctxRec = [];
+  onMount(async () => {
+    try { const r = await leerNecesidadesPublicas({}); ctxNec = r.items; } catch (_) {}
+    try { ctxRec = await leerRecursosPublicos({}); } catch (_) {}
+  });
 
   const categorias = ['rescate', 'medico', 'agua', 'alimento', 'refugio', 'otro'];
   const urgencias = ['critica', 'alta', 'media'];
@@ -142,7 +151,7 @@
     {#if mostrarMapa}
       <div class="mapa-titulo">{$t('reportar.mapa_titulo')}</div>
       <p class="ayuda">{$t('reportar.mapa_ayuda')}</p>
-      <MapaPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} />
+      <MapaUnificado conPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} necesidades={ctxNec} recursos={ctxRec} alto="300px" />
       {#if pinLat != null}
         <p class="ayuda pin-ok">✓ {$t('reportar.mapa_marcado')}</p>
       {/if}
