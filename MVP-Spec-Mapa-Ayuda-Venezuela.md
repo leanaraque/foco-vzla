@@ -1056,3 +1056,31 @@ Función pura, testeable. `prioridad ∈ [0,100]` = f(atrapados+con_vida, médic
 
 ### 25.10 Secuencia de construcción
 1. **Motor de prioridad** (puro + tests) ← primer ladrillo. 2. `/reportar` nuevo + `payload`/`crearNecesidad`. 3. **rules** nuevas (`validNuevaNecesidad` del esquema nuevo). 4. Lecturas de la app (color/orden por prioridad; badges severidad/rescate_activo/precision). 5. **Curador** (Cloud Function) + **re-ingesta** (backfill Opción 1, recupera severidad faltante y contactos de recursos). 6. Migración del histórico al esquema nuevo + mantener limpio con el curador agendado.
+
+---
+
+## 26. Home / data storytelling — la cara pública como fuente de verdad (26 jun 2026)
+
+> La ruta `/` deja de redirigir al mapa y pasa a ser una **home narrativa** que cuenta la emergencia con datos. Basada en *"Storytelling with Data"* (Knaflic): explica arriba, deja explorar abajo; se diseña para una audiencia y una acción concretas. Es **solo capa de presentación**: consume las lecturas de `db.js` (read-only) y computa los agregados en cliente; **no toca el modelo de datos** (eso es §25, otro frente de trabajo).
+
+### 26.1 Dos audiencias (define la estructura)
+- **Quien colabora** (rescatista/brigada/donante/voluntario): pregunta *"¿dónde y qué se necesita más?"* → acción: dirigir el recurso al punto de mayor **brecha**.
+- **Quien reporta / afectado** (estrés, poca señal/batería): *"¿cómo pido ayuda y qué hay cerca?"* → acción: **reportar en <60s** y/o encontrar recurso cercano.
+Por eso la home **se bifurca temprano** en dos puertas; la narrativa siguiente sirve sobre todo a quien colabora.
+
+### 26.2 Arco narrativo (mobile-first; el scroll vertical es la narrativa)
+1. **Hero** — idea grande en una frase. 2. **Dos puertas** ("Necesito ayuda" / "Quiero ayudar") sobre el pliegue. 3. **Sello de verdad** — procedencia + frescura. 4. **Pulso** — 4 cifras (rescates activos, sin atender, recursos, refugios). 5. **Brecha por zona** — barras necesidades vs recursos (la pieza accionable). 6. **Composición por categoría** — qué se pide vs qué hay. 7. **Procedencia** — lista de fuentes con conteos.
+
+### 26.3 Componentes (todos presentación pura)
+- `routes/Inicio.svelte` — orquesta; lee `leerNecesidadesPublicas`/`leerRecursosPublicos` una vez y pasa los arrays a las secciones.
+- `components/BrechaZona.svelte` + `lib/regiones.js` — agrupación geográfica para la narrativa (cajas bbox; **prefiere `estado`/`municipio` del §25 si existen** → forward-compatible).
+- `components/Composicion.svelte` — conteo por categoría.
+- `components/Fuentes.svelte` — procedencia por `creador` (forward-compatible con `fuentes[].sistema`).
+
+### 26.4 Principios SWD aplicados
+Color con propósito (rojo=necesidad, verde=recurso; el resto gris), una idea por gráfico con título-frase, barras horizontales sobre tortas, cifras grandes para números únicos, mucho aire, todo a un pulgar. Sin emojis.
+
+### 26.5 Frontera y despliegue
+- **No cruza con §25:** archivos nuevos de presentación; `App.svelte`/`i18n.js` solo aditivos. Si un agregado no existe en `db.js`, se computa en cliente (no se pide cambio de datos).
+- **Deploy:** `npm run deploy:hosting` (solo hosting; NO sube rules/functions). Requiere `.env.local` con `VITE_RECAPTCHA_SITE_KEY` (site key pública) en build, o App Check queda deshabilitado y Firestore (con enforcement) rechaza las lecturas → la home muestra ceros.
+- **Resiliente al curador:** la home refleja lo que digan los datos; hoy expone el sesgo conocido (casi todo `categoria=rescate`; acopio como `otro`) — se corrige solo cuando el curador del §25 tipifica.
