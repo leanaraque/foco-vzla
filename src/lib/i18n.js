@@ -289,6 +289,7 @@ const diccionarios = {
     'accion.resolver': 'Marcar resuelta',
     'accion.reabrir': 'Reabrir',
     'accion.verificar': 'Verificar',
+    'accion.aprobar_revision': 'Aprobar (revisado)',
     'accion.invalidar': 'Marcar inválida',
     'accion.ver_contacto': 'Ver contacto',
     'reclamada_por': 'A cargo de',

@@ -59,8 +59,15 @@
       <button on:click={() => accion(reabrir)} disabled={trabajando}>{$t('accion.reabrir')}</button>
     {/if}
 
-    {#if n.verificacion === 'no_verificada' && n.estado !== 'cerrada_invalida'}
-      <button on:click={() => accion(verificar)} disabled={trabajando}>{$t('accion.verificar')}</button>
+    <!-- Aprobar manualmente: tanto un caso sin validar como uno ESCALADO por la
+         salvaguarda del aislado (pendiente_revision, §22.5). Verificar → verificada.
+         En el caso prioritario es la acción esperada de la "revisión del operador",
+         por eso resalta. -->
+    {#if (n.verificacion === 'no_verificada' || n.verificacion === 'pendiente_revision') && n.estado !== 'cerrada_invalida'}
+      <button class={n.verificacion === 'pendiente_revision' ? 'btn-ok' : ''}
+        on:click={() => accion(verificar)} disabled={trabajando}>
+        {$t(n.verificacion === 'pendiente_revision' ? 'accion.aprobar_revision' : 'accion.verificar')}
+      </button>
     {/if}
 
     <button on:click={verContacto} disabled={cargandoContacto}>
