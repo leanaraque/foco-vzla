@@ -165,6 +165,84 @@ export const solicitarResolucion = onCall(
   }
 );
 
+// === Editar necesidad (aplicar una corrección) → solo coordinador ============
+// Las rules PROHÍBEN que un coordinador reescriba el contenido del reporte (F3:
+// `updateGestionValido` solo permite estado/verificacion/reclamada_por). Para aplicar
+// una corrección legítima (urgencia/categoría/descripción/sector/ubicación/contacto)
+// se usa esta función (Admin SDK = bypassa rules), gateada por App Check + rol de
+// coordinador. La ubicación PÚBLICA se mantiene aproximada (el cliente envía `geo`
+// ya difuminado vía geoPublico); las coords exactas van al privado (geo_exacta, §9-1).
+// Si se pasa `solicitudId`, marca esa solicitud como gestionada en la misma operación.
+const CATS_EDIT = ['rescate','medico','agua','alimento','refugio','transporte','acopio','servicios','otro'];
+const URGS_EDIT = ['critica','alta','media'];
+export const editarNecesidad = onCall(
+  { enforceAppCheck: true, region: 'us-central1', cors: true },
+  async (req) => {
+    if (req.auth?.token?.coordinador !== true) {
+      throw new HttpsError('permission-denied', 'Solo un coordinador puede editar.');
+    }
+    const d = req.data || {};
+    const necesidadId = limpio(d.necesidadId, 60);
+    if (!necesidadId) throw new HttpsError('invalid-argument', 'Falta necesidadId.');
+    const ref = db.collection('necesidades').doc(necesidadId);
+    const snap = await ref.get();
+    if (!snap.exists) throw new HttpsError('not-found', 'La necesidad no existe.');
+
+    // --- Campos públicos (solo los provistos) ---
+    const pub = {};
+    if (d.categoria != null) {
+      const c = limpio(d.categoria, 40);
+      if (!CATS_EDIT.includes(c)) throw new HttpsError('invalid-argument', 'Categoría inválida.');
+      pub.categoria = c;
+    }
+    if (d.urgencia != null) {
+      const u = limpio(d.urgencia, 20);
+      if (!URGS_EDIT.includes(u)) throw new HttpsError('invalid-argument', 'Urgencia inválida.');
+      pub.urgencia = u;
+    }
+    if (d.descripcion != null) pub.descripcion = limpio(d.descripcion, 500);
+    if (d.sector != null) {
+      const s = limpio(d.sector, 140);
+      if (!s) throw new HttpsError('invalid-argument', 'El sector no puede quedar vacío.');
+      pub.sector = s;
+    }
+    // Ubicación PÚBLICA (aproximada): el cliente la difumina con geoPublico y la envía.
+    if (d.geo && Number.isFinite(d.geo.lat) && Number.isFinite(d.geo.lng) && typeof d.geo.geohash === 'string') {
+      pub.geo = { lat: d.geo.lat, lng: d.geo.lng, geohash: d.geo.geohash };
+      pub.sectorGeo = d.geo.geohash.slice(0, 5);
+    }
+    if (Object.keys(pub).length) {
+      pub.actualizada_en = FieldValue.serverTimestamp();
+      await ref.update(pub);
+    }
+
+    // --- Subdocumento privado: contacto + coords exactas ---
+    const priv = {};
+    if (d.contacto != null) priv.contacto = limpio(d.contacto, 140);
+    if (d.geo_exacta && Number.isFinite(d.geo_exacta.lat) && Number.isFinite(d.geo_exacta.lng)) {
+      priv.geo_exacta = { lat: d.geo_exacta.lat, lng: d.geo_exacta.lng };
+    }
+    if (Object.keys(priv).length) {
+      await ref.collection('privado').doc('datos').set(
+        { creador: snap.data().creador || 'coordinador', ...priv },
+        { merge: true }
+      );
+    }
+
+    // --- Cierra la solicitud que originó la edición ---
+    const solicitudId = limpio(d.solicitudId, 60);
+    if (solicitudId) {
+      await db.collection('solicitudes').doc(solicitudId).set({
+        estado: 'gestionada',
+        nota: limpio(d.nota, 300),
+        gestionada_por: req.auth.uid,
+        gestionada_en: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    return { ok: true };
+  }
+);
+
 // === Validación por multitud: contador + transición de estado =============
 // Trigger al crear una confirmación. (§22.5)
 export const onConfirmacion = onDocumentCreated(

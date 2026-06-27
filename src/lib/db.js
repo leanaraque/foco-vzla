@@ -5,7 +5,7 @@ import {
   query, where, orderBy, limit, startAfter, onSnapshot,
   serverTimestamp
 } from 'firebase/firestore';
-import { db, auth } from './firebase.js';
+import { db, auth, app } from './firebase.js';
 import { geoPublicoSeguro, construirPrivado, construirNecesidadPublica } from './payload.js';
 
 const PAGINA = 25; // tope de documentos por página → factura acotada
@@ -342,4 +342,19 @@ export function gestionarSolicitud(id, estado, nota = '') {
     gestionada_por: auth.currentUser?.uid ?? null,
     gestionada_en: serverTimestamp()
   });
+}
+
+// Lee una necesidad pública por id (para precargar el editor de una corrección).
+export async function leerNecesidad(id) {
+  const snap = await getDoc(doc(db, 'necesidades', id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+// Aplica la edición de una corrección y marca la solicitud gestionada. Las reglas
+// PROHÍBEN que el coordinador reescriba el contenido del reporte (invariante F3), así
+// que esto pasa por la Cloud Function `editarNecesidad` (Admin SDK + App Check + rol).
+export async function aplicarEdicionNecesidad(payload) {
+  const { getFunctions, httpsCallable } = await import('firebase/functions');
+  const fn = httpsCallable(getFunctions(app), 'editarNecesidad');
+  return (await fn(payload)).data;
 }
