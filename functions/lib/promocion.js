@@ -67,8 +67,10 @@ export function planearPromocion(stagingDocs, canonicos, ahora = Date.now()) {
       // CIUDADANO (línea roja) o un doc de OTRA fuente/operador/curador, NO se pisa su
       // contenido: solo se le ADJUNTA la procedencia (fuentes[]). Así un cruce de
       // fuentes nunca borra la señal de otra (p.ej. "con vida" de un reporte de IG) ni
-      // reintroduce PII que el operador haya editado.
-      const refrescar = !esCiudadano(match.creador) && match.creador === st.sistema;
+      // reintroduce PII que el operador haya editado. Tampoco se pisa una corrección que
+      // un COORDINADOR aplicó a mano desde el Panel (`editado_por_operador`, editarNecesidad).
+      const refrescar = !esCiudadano(match.creador) && match.creador === st.sistema
+        && !match.editado_por_operador;
       const campos = refrescar
         ? (st.destino === 'recurso' ? camposRecurso(st.publico) : camposNecesidad(st.publico, ahora))
         : null;

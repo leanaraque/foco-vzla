@@ -283,6 +283,14 @@ describe('promotor — planearPromocion (decisión pura)', () => {
     expect(op.campos.categoria).toBe('rescate');
   });
 
+  it('NO pisa un doc que el coordinador editó a mano (editado_por_operador), aunque sea su dueño', () => {
+    const canon = { id: 'C6', creador: 'TV_EDIF', editado_por_operador: true, categoria: 'rescate', sector: 'Belo Horizonte', geo: { lat: 10.6100, lng: -67.0100 } };
+    const op = planearPromocion([stg('TV_EDIF', '99', pub(10.6100, -67.0100))], { necesidades: [canon], recursos: [] })[0];
+    expect(op.tipo).toBe('actualizar');
+    expect(op.campos).toBeNull();        // la corrección humana se conserva
+    expect(op.fuentes.some((f) => f.sistema === 'TV_EDIF' && f.id_externo === '99')).toBe(true);
+  });
+
   it('camposNecesidad deriva severidad y prioridad', () => {
     const c = camposNecesidad({ categoria: 'rescate', sector: 'X', descripcion: 'Edificio con daño total', geo: { lat: 10.6, lng: -66.9, geohash: 'd3ze8jdkej' }, precision: 'exacta' }, Date.now());
     expect(c.severidad).toBe('total');

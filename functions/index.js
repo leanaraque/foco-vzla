@@ -189,7 +189,10 @@ export const editarNecesidad = onCall(
     if (!snap.exists) throw new HttpsError('not-found', 'La necesidad no existe.');
 
     // --- Campos públicos (solo los provistos) ---
-    const pub = {};
+    // `editado_por_operador`: marca el doc como tocado por un humano. La ingesta
+    // recurrente NO volverá a pisar su contenido (regla de propiedad en
+    // functions/lib/promocion.js) aunque la necesidad sea de origen ingesta.
+    const pub = { editado_por_operador: true };
     if (d.categoria != null) {
       const c = limpio(d.categoria, 40);
       if (!CATS_EDIT.includes(c)) throw new HttpsError('invalid-argument', 'Categoría inválida.');
