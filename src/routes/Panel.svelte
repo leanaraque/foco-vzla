@@ -31,16 +31,35 @@
   let unsub = null;
 
   // --- cola de revisión del operador (pendiente_revision) ---
-  const REV_LIMITE = 150;
+  // Se traen TODOS los casos escalados (no una porción): son la cola que el operador
+  // debe procesar. Se ordenan por prioridad (rescate activo → urgencia → recencia).
+  const REV_LIMITE = 2000;
   let porRevisar = [];
-  let porRevisarTotal = null;       // conteo REAL (agregación), puede superar el render
-  let unsubRev = null, revArrancado = false;
-  function subRevisar() {
+  let porRevisarTotal = null;       // conteo REAL (agregación)
+  let unsubRev = null;
+  function subRevisarDocs() {
     if (unsubRev) { unsubRev(); unsubRev = null; }
-    const filtros = { categoria: fCategoria || null, urgencia: fUrgencia || null, limite: REV_LIMITE };
-    unsubRev = suscribirPorRevisar((data) => (porRevisar = data), filtros);
-    contarPorRevisar(filtros).then((n) => (porRevisarTotal = n));
+    unsubRev = suscribirPorRevisar(
+      (data) => (porRevisar = data),
+      { categoria: fCategoria || null, urgencia: fUrgencia || null, limite: REV_LIMITE }
+    );
   }
+  function recuentoRevisar() {
+    contarPorRevisar({ categoria: fCategoria || null, urgencia: fUrgencia || null })
+      .then((n) => (porRevisarTotal = n));
+  }
+  const ordU = { critica: 0, alta: 1, media: 2 };
+  function triarRevisar(arr) {
+    return [...arr].sort((a, b) =>
+      ((b.rescate_activo === true) - (a.rescate_activo === true))
+      || (ordU[a.urgencia] ?? 3) - (ordU[b.urgencia] ?? 3)
+      || (b.creada_en?.seconds || 0) - (a.creada_en?.seconds || 0)
+    );
+  }
+  $: porRevisarVista = triarRevisar(porRevisar);
+  // Badge: con la pestaña abierta usa el conteo REAL ya deduplicado (coincide con la
+  // lista y con los "Caso prioritario" del mapa); cerrada, el de agregación (heads-up).
+  $: revBadgeNum = porRevisar.length || porRevisarTotal || 0;
 
   // --- solicitudes de la comunidad (Resuelto / Corrección) ---
   let solicitudes = [];
@@ -89,10 +108,14 @@
   $: if ($esCoordinador && !solArrancado) { solArrancado = true; solIntentos = 0; subSolicitudes(); }
   $: if (!$esCoordinador && solArrancado) { if (unsubSol) { unsubSol(); unsubSol = null; } solArrancado = false; solicitudes = []; }
 
-  // Cola de revisión (necesidades son lectura pública → sin carrera de claim).
-  // Re-suscribe al cambiar los filtros de categoría/urgencia (acotan la cola).
-  $: if ($esCoordinador) { fCategoria; fUrgencia; revArrancado = true; subRevisar(); }
-  $: if (!$esCoordinador && revArrancado) { if (unsubRev) { unsubRev(); unsubRev = null; } revArrancado = false; porRevisar = []; porRevisarTotal = null; }
+  // Badge: conteo REAL (1 lectura de agregación), siempre que sea coordinador y al
+  // cambiar los filtros. Barato → no depende de abrir la pestaña.
+  $: if ($esCoordinador) { fCategoria; fUrgencia; recuentoRevisar(); }
+  // Docs: traer TODOS los casos escalados SOLO mientras se ve la pestaña (evita ~900
+  // lecturas si nunca se abre); re-suscribe al cambiar filtros.
+  $: if ($esCoordinador && vista === 'revisar') { fCategoria; fUrgencia; subRevisarDocs(); }
+  $: if ((!$esCoordinador || vista !== 'revisar') && unsubRev) { unsubRev(); unsubRev = null; porRevisar = []; }
+  $: if (!$esCoordinador) porRevisarTotal = null;
 
   onDestroy(() => { unsub && unsub(); unsubSol && unsubSol(); unsubRev && unsubRev(); });
 </script>
@@ -151,7 +174,7 @@
       <button class:activo={vista === 'lista'} on:click={() => (vista = 'lista')}>{$t('panel.lista')}</button>
       <button class:activo={vista === 'revisar'} on:click={() => (vista = 'revisar')}>
         {$t('panel.por_revisar')}
-        {#if (porRevisarTotal ?? porRevisar.length) > 0}<span class="badge-num">{porRevisarTotal ?? porRevisar.length}</span>{/if}
+        {#if revBadgeNum > 0}<span class="badge-num">{revBadgeNum}</span>{/if}
       </button>
       <button class:activo={vista === 'mapa'} on:click={() => (vista = 'mapa')}>{$t('panel.mapa')}</button>
       <button class:activo={vista === 'solicitudes'} on:click={() => (vista = 'solicitudes')}>
@@ -163,18 +186,16 @@
     {#if vista === 'revisar'}
       <h2 class="sub">{$t('panel.por_revisar_titulo')}</h2>
       <p class="intro-seg">{$t('panel.por_revisar_intro')}</p>
-      {#if porRevisarTotal != null}
-        <p class="ayuda">
-          {$t('panel.por_revisar_total').replace('{n}', porRevisarTotal)}
-          {#if porRevisarTotal > porRevisar.length}
-            · {$t('panel.por_revisar_capado').replace('{n}', porRevisar.length)}
-          {/if}
-        </p>
-      {/if}
-      {#if porRevisar.length === 0}
+      <p class="ayuda">
+        {$t('panel.por_revisar_total').replace('{n}', porRevisarVista.length)}
+        {#if porRevisar.length >= REV_LIMITE}
+          · {$t('panel.por_revisar_capado')}
+        {/if}
+      </p>
+      {#if porRevisarVista.length === 0}
         <p class="ayuda">{$t('panel.por_revisar_vacio')}</p>
       {:else}
-        {#each porRevisar as n (n.id)}
+        {#each porRevisarVista as n (n.id)}
           <NeedCard {n} />
         {/each}
       {/if}

@@ -175,7 +175,7 @@ export function suscribirNecesidades({ soloVerificadas = true, categoria = null,
 // puede ser GRANDE (ingesta masiva), acepta filtros categoría/urgencia (índices
 // compuestos verificacion+categoria/urgencia+creada_en) para que el operador acote y
 // encuentre cualquier caso, y un `limite` de render. El total real se cuenta aparte.
-export function suscribirPorRevisar(cb, { categoria = null, urgencia = null, limite = 150 } = {}, onError) {
+export function suscribirPorRevisar(cb, { categoria = null, urgencia = null, limite = 2000 } = {}, onError) {
   const cond = [where('verificacion', '==', 'pendiente_revision')];
   if (categoria) cond.push(where('categoria', '==', categoria));
   if (urgencia) cond.push(where('urgencia', '==', urgencia));
