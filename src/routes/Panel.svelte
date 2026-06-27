@@ -2,7 +2,7 @@
   import { onDestroy } from 'svelte';
   import { t } from '../lib/i18n.js';
   import { user, esCoordinador, authListo, entrarCoordinador, salir } from '../lib/stores.js';
-  import { suscribirNecesidades, suscribirSolicitudes } from '../lib/db.js';
+  import { suscribirNecesidades, suscribirSolicitudes, suscribirPorRevisar, contarPorRevisar } from '../lib/db.js';
   import NeedCard from '../components/NeedCard.svelte';
   import SolicitudCard from '../components/SolicitudCard.svelte';
   import MapaUnificado from '../components/MapaUnificado.svelte';
@@ -29,6 +29,18 @@
   let vista = 'lista'; // 'lista' | 'mapa' | 'solicitudes'
   let items = [];
   let unsub = null;
+
+  // --- cola de revisión del operador (pendiente_revision) ---
+  const REV_LIMITE = 150;
+  let porRevisar = [];
+  let porRevisarTotal = null;       // conteo REAL (agregación), puede superar el render
+  let unsubRev = null, revArrancado = false;
+  function subRevisar() {
+    if (unsubRev) { unsubRev(); unsubRev = null; }
+    const filtros = { categoria: fCategoria || null, urgencia: fUrgencia || null, limite: REV_LIMITE };
+    unsubRev = suscribirPorRevisar((data) => (porRevisar = data), filtros);
+    contarPorRevisar(filtros).then((n) => (porRevisarTotal = n));
+  }
 
   // --- solicitudes de la comunidad (Resuelto / Corrección) ---
   let solicitudes = [];
@@ -77,7 +89,12 @@
   $: if ($esCoordinador && !solArrancado) { solArrancado = true; solIntentos = 0; subSolicitudes(); }
   $: if (!$esCoordinador && solArrancado) { if (unsubSol) { unsubSol(); unsubSol = null; } solArrancado = false; solicitudes = []; }
 
-  onDestroy(() => { unsub && unsub(); unsubSol && unsubSol(); });
+  // Cola de revisión (necesidades son lectura pública → sin carrera de claim).
+  // Re-suscribe al cambiar los filtros de categoría/urgencia (acotan la cola).
+  $: if ($esCoordinador) { fCategoria; fUrgencia; revArrancado = true; subRevisar(); }
+  $: if (!$esCoordinador && revArrancado) { if (unsubRev) { unsubRev(); unsubRev = null; } revArrancado = false; porRevisar = []; porRevisarTotal = null; }
+
+  onDestroy(() => { unsub && unsub(); unsubSol && unsubSol(); unsubRev && unsubRev(); });
 </script>
 
 <div class="contenedor">
@@ -129,9 +146,13 @@
       </label>
     </div>
 
-    <!-- Toggle lista / mapa / solicitudes -->
+    <!-- Toggle lista / por revisar / mapa / solicitudes -->
     <div class="toggle">
       <button class:activo={vista === 'lista'} on:click={() => (vista = 'lista')}>{$t('panel.lista')}</button>
+      <button class:activo={vista === 'revisar'} on:click={() => (vista = 'revisar')}>
+        {$t('panel.por_revisar')}
+        {#if (porRevisarTotal ?? porRevisar.length) > 0}<span class="badge-num">{porRevisarTotal ?? porRevisar.length}</span>{/if}
+      </button>
       <button class:activo={vista === 'mapa'} on:click={() => (vista = 'mapa')}>{$t('panel.mapa')}</button>
       <button class:activo={vista === 'solicitudes'} on:click={() => (vista = 'solicitudes')}>
         {$t('panel.solicitudes')}
@@ -139,7 +160,26 @@
       </button>
     </div>
 
-    {#if vista === 'solicitudes'}
+    {#if vista === 'revisar'}
+      <h2 class="sub">{$t('panel.por_revisar_titulo')}</h2>
+      <p class="intro-seg">{$t('panel.por_revisar_intro')}</p>
+      {#if porRevisarTotal != null}
+        <p class="ayuda">
+          {$t('panel.por_revisar_total').replace('{n}', porRevisarTotal)}
+          {#if porRevisarTotal > porRevisar.length}
+            · {$t('panel.por_revisar_capado').replace('{n}', porRevisar.length)}
+          {/if}
+        </p>
+      {/if}
+      {#if porRevisar.length === 0}
+        <p class="ayuda">{$t('panel.por_revisar_vacio')}</p>
+      {:else}
+        {#each porRevisar as n (n.id)}
+          <NeedCard {n} />
+        {/each}
+      {/if}
+
+    {:else if vista === 'solicitudes'}
       <h2 class="sub">{$t('sol.titulo')}</h2>
       <p class="intro-seg">{$t('sol.intro')}</p>
       <label class="check">

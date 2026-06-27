@@ -3,7 +3,7 @@
 import {
   collection, doc, setDoc, updateDoc, getDoc, getDocs, getDocsFromCache,
   query, where, orderBy, limit, startAfter, onSnapshot,
-  serverTimestamp
+  serverTimestamp, getCountFromServer
 } from 'firebase/firestore';
 import { db, auth, app } from './firebase.js';
 import { geoPublicoSeguro, construirPrivado, construirNecesidadPublica } from './payload.js';
@@ -167,6 +167,36 @@ export function suscribirNecesidades({ soloVerificadas = true, categoria = null,
   return onSnapshot(q, (snap) => {
     cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   });
+}
+
+// Cola de revisión del operador (§22.5): necesidades ESCALADAS por la salvaguarda
+// del aislado (verificacion == 'pendiente_revision'). A diferencia de la Lista
+// general (limit 25 mezclado), aquí se traen SOLO los casos por revisar. Como la cola
+// puede ser GRANDE (ingesta masiva), acepta filtros categoría/urgencia (índices
+// compuestos verificacion+categoria/urgencia+creada_en) para que el operador acote y
+// encuentre cualquier caso, y un `limite` de render. El total real se cuenta aparte.
+export function suscribirPorRevisar(cb, { categoria = null, urgencia = null, limite = 150 } = {}, onError) {
+  const cond = [where('verificacion', '==', 'pendiente_revision')];
+  if (categoria) cond.push(where('categoria', '==', categoria));
+  if (urgencia) cond.push(where('urgencia', '==', urgencia));
+  const q = query(collection(db, 'necesidades'), ...cond, orderBy('creada_en', 'desc'), limit(limite));
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.duplicado_de)),
+    onError
+  );
+}
+
+// Conteo REAL (agregación barata, no lee N docs) de la cola de revisión, con los
+// mismos filtros. Para mostrar el tamaño honesto de la cola en el badge/intro.
+export async function contarPorRevisar({ categoria = null, urgencia = null } = {}) {
+  const cond = [where('verificacion', '==', 'pendiente_revision')];
+  if (categoria) cond.push(where('categoria', '==', categoria));
+  if (urgencia) cond.push(where('urgencia', '==', urgencia));
+  try {
+    const snap = await getCountFromServer(query(collection(db, 'necesidades'), ...cond));
+    return snap.data().count;
+  } catch (_) { return null; }
 }
 
 export function suscribirRecursos(cb) {

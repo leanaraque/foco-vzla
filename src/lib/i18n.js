@@ -247,6 +247,12 @@ const diccionarios = {
     'panel.vacio': 'No hay necesidades con estos filtros.',
     'panel.cargar_mas': 'Cargar más',
     'panel.solicitudes': 'Solicitudes',
+    'panel.por_revisar': 'Por revisar',
+    'panel.por_revisar_titulo': 'Casos prioritarios por revisar',
+    'panel.por_revisar_intro': 'Reportes que la comunidad no logró confirmar (posibles casos aislados). Aprueba los reales o márcalos inválidos. Usa los filtros de arriba (categoría / urgencia) para acotar la cola.',
+    'panel.por_revisar_vacio': 'No hay casos pendientes de revisión con estos filtros.',
+    'panel.por_revisar_total': '{n} casos por revisar en total.',
+    'panel.por_revisar_capado': 'mostrando los {n} más recientes — filtra para ver el resto.',
 
     // Gestión de solicitudes de la comunidad (Resuelto / Corrección) en el panel
     'sol.titulo': 'Solicitudes de la comunidad',
