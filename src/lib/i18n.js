@@ -103,7 +103,15 @@ const diccionarios = {
     // Acciones en el popup del mapa
     'pmapa.pop_confirmar': 'Confirmar que es real',
     'pmapa.pop_resuelto': 'Marcar como resuelto',
+    'pmapa.pop_corregir': 'Corregir o añadir detalles',
     'pmapa.confirmado_ok': 'Gracias. Confirmado.',
+    // Formulario "Corregir o añadir detalles" (avisa a un coordinador por correo)
+    'corr.titulo': 'Corregir o añadir detalles',
+    'corr.intro': 'Ayúdanos a mejorar este punto. Tu aporte llega a un coordinador para revisarlo.',
+    'corr.detalle': '¿Qué hay que corregir o añadir?',
+    'corr.detalle_ph': 'Ej.: la categoría correcta es médico, el edificio es otro, hay más personas, el contacto cambió…',
+    'corr.falta': 'Cuéntanos qué hay que corregir o añadir.',
+    'corr.ok': 'Gracias. Un coordinador revisará tu aporte.',
     // Formulario "¿Resuelto?" (avisa a un coordinador por correo)
     'resol.titulo': '¿Marcar como resuelto?',
     'resol.intro': 'Esto avisa a un coordinador para que lo revise y lo cierre. Cuéntanos brevemente:',

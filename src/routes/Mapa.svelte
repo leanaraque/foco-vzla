@@ -14,7 +14,7 @@
   const demo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
 
   let items = [], recursos = [], origen = '', cargando = true;
-  let vista = 'lista';            // toggle SOLO en móvil: 'lista' | 'mapa'
+  let vista = 'mapa';             // móvil: por defecto el MAPA (panel para ayudar)
   let esDesktop = false;
   let enfocado = null;            // { id, t } → MapaUnificado vuela al punto
 
@@ -71,20 +71,24 @@
     try { await confirmarNecesidad(id); } catch (_) { /* ya confirmó o falla: igual agradecemos */ }
     if (btn) { btn.textContent = $t('pmapa.confirmado_ok'); btn.disabled = true; }
   }
-  function onResuelto(e) {
-    const it = items.find((n) => n.id === (e.detail || {}).id);
-    if (it) abrirResol(it);
-  }
+  function onResuelto(e) { const it = items.find((n) => n.id === (e.detail || {}).id); if (it) abrirRevision(it, 'resuelto'); }
+  function onCorregir(e) { const it = items.find((n) => n.id === (e.detail || {}).id); if (it) abrirRevision(it, 'correccion'); }
 
-  // --- Formulario "¿Resuelto?" → email a un coordinador (honeypot + límite local) ---
-  let resolItem = null, rMotivo = '', rFuente = '', rContacto = '', rHoney = '';
+  // --- Formulario de revisión (Resuelto / Corrección) → email a un coordinador.
+  // Honeypot + límite local; el server también valida (App Check + rate-limit). ---
+  let resolItem = null, rModo = 'resuelto';
+  let rMotivo = '', rFuente = '', rDetalle = '', rContacto = '', rHoney = '';
   let rEnviando = false, rResult = '', rError = '';
-  function abrirResol(n) { resolItem = n; rMotivo = ''; rFuente = ''; rContacto = ''; rHoney = ''; rResult = ''; rError = ''; }
+  function abrirRevision(n, modo) {
+    resolItem = n; rModo = modo;
+    rMotivo = ''; rFuente = ''; rDetalle = ''; rContacto = ''; rHoney = ''; rResult = ''; rError = '';
+  }
   function cerrarResol() { resolItem = null; }
   async function enviarResol() {
     rError = '';
     if (rHoney) { resolItem = null; return; }                 // honeypot: bot → descartar
-    if (!rMotivo.trim()) { rError = $t('resol.falta'); return; }
+    const esCorr = rModo === 'correccion';
+    if (esCorr ? !rDetalle.trim() : !rMotivo.trim()) { rError = $t(esCorr ? 'corr.falta' : 'resol.falta'); return; }
     const ultimo = Number(localStorage.getItem('foco_resol_ts') || 0);
     if (Date.now() - ultimo < 60000) { rError = $t('resol.espera'); return; } // límite local
     rEnviando = true;
@@ -93,9 +97,10 @@
       const { getFunctions, httpsCallable } = await import('firebase/functions');
       const fn = httpsCallable(getFunctions(app), 'solicitarResolucion');
       await fn({
+        tipo: rModo,
         id: resolItem.id, sector: resolItem.sector || '', categoria: resolItem.categoria || '',
         urgencia: resolItem.urgencia || '', descripcion: resolItem.descripcion || '',
-        motivo: rMotivo.trim(), fuente: rFuente.trim(), contacto: rContacto.trim(),
+        motivo: rMotivo.trim(), fuente: rFuente.trim(), detalle: rDetalle.trim(), contacto: rContacto.trim(),
         url: location.origin + '/mapa?focus=' + resolItem.id
       });
       localStorage.setItem('foco_resol_ts', String(Date.now()));
@@ -124,11 +129,12 @@
     esDesktop = mq.matches;
     onMq = (e) => (esDesktop = e.matches);
     mq.addEventListener('change', onMq);
-    if (!demo) { try { await asegurarSesionAnonima(); } catch (_) { /* necesidades es público */ } }
-    await cargar(false);
-    // Enlace profundo del correo (?focus=<id>): vuela a ese punto.
+    // Enlace profundo del correo (?focus=<id>): marcar ANTES de cargar para que el
+    // mapa no se auto-encuadre a todo; cuando el punto exista, se vuela a él.
     const f = new URLSearchParams(window.location.search).get('focus');
     if (f) { enfocado = { id: f, t: Date.now() }; if (!esDesktop) vista = 'mapa'; }
+    if (!demo) { try { await asegurarSesionAnonima(); } catch (_) { /* necesidades es público */ } }
+    await cargar(false);
   });
   onDestroy(() => { if (mq && onMq) mq.removeEventListener('change', onMq); });
 </script>
@@ -218,7 +224,7 @@
     {#if esDesktop || vista === 'mapa'}
       <div class="mapa-col">
         <MapaUnificado necesidades={necFiltradas} recursos={recFiltrados} alto={mapaAlto}
-          acciones={true} {enfocado} on:confirmar={onConfirmar} on:resuelto={onResuelto} />
+          acciones={true} {enfocado} on:confirmar={onConfirmar} on:resuelto={onResuelto} on:corregir={onCorregir} />
       </div>
     {/if}
   </div>
@@ -229,18 +235,22 @@
   <div class="overlay" on:click={cerrarResol} role="presentation">
     <div class="hoja" on:click|stopPropagation role="dialog" aria-modal="true">
       {#if rResult === 'ok'}
-        <p class="aviso-ok">{$t('resol.ok')}</p>
+        <p class="aviso-ok">{$t(rModo === 'correccion' ? 'corr.ok' : 'resol.ok')}</p>
         <button class="btn-bloque" on:click={cerrarResol}>{$t('mapa.cerrar')}</button>
       {:else}
-        <h2>{$t('resol.titulo')}</h2>
+        <h2>{$t(rModo === 'correccion' ? 'corr.titulo' : 'resol.titulo')}</h2>
         <p class="r-sector">{resolItem.sector}</p>
-        <p class="r-intro">{$t('resol.intro')}</p>
+        <p class="r-intro">{$t(rModo === 'correccion' ? 'corr.intro' : 'resol.intro')}</p>
 
-        <label for="r-motivo">{$t('resol.motivo')}</label>
-        <textarea id="r-motivo" name="motivo" bind:value={rMotivo} placeholder={$t('resol.motivo_ph')}></textarea>
-
-        <label for="r-fuente">{$t('resol.fuente')}</label>
-        <input id="r-fuente" name="fuente" type="text" bind:value={rFuente} placeholder={$t('resol.fuente_ph')} />
+        {#if rModo === 'correccion'}
+          <label for="r-detalle">{$t('corr.detalle')}</label>
+          <textarea id="r-detalle" name="detalle" bind:value={rDetalle} placeholder={$t('corr.detalle_ph')}></textarea>
+        {:else}
+          <label for="r-motivo">{$t('resol.motivo')}</label>
+          <textarea id="r-motivo" name="motivo" bind:value={rMotivo} placeholder={$t('resol.motivo_ph')}></textarea>
+          <label for="r-fuente">{$t('resol.fuente')}</label>
+          <input id="r-fuente" name="fuente" type="text" bind:value={rFuente} placeholder={$t('resol.fuente_ph')} />
+        {/if}
 
         <label for="r-contacto">{$t('resol.contacto')}</label>
         <input id="r-contacto" name="contacto" type="text" bind:value={rContacto} />

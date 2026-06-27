@@ -78,10 +78,11 @@ export const solicitarCoordinador = onCall(
   }
 );
 
-// === Solicitud de "Resuelto" → email al coordinador (sin tocar datos) =======
-// Callable: un usuario propone que un punto ya está resuelto. NO cambia el estado
-// (eso solo lo hace un coordinador desde el Panel); solo NOTIFICA por correo con
-// los detalles + las respuestas de validación. App Check obligatorio + rate-limit.
+// === Solicitud de revisión (Resuelto / Corrección) → email al coordinador ====
+// Callable: un usuario propone que un punto ya está resuelto (tipo 'resuelto') o
+// aporta una corrección/más detalles (tipo 'correccion'). NO cambia datos ni estado
+// (eso solo lo hace un coordinador desde el Panel); solo NOTIFICA por correo con los
+// detalles + las respuestas. App Check obligatorio + rate-limit (anti-spam).
 export const solicitarResolucion = onCall(
   { secrets: [RESEND_API_KEY], enforceAppCheck: true, region: 'us-central1', cors: true },
   async (req) => {
@@ -96,6 +97,8 @@ export const solicitarResolucion = onCall(
     const fuente = limpio(d.fuente, 120);      // ¿cómo lo sabe?
     const contacto = limpio(d.contacto, 120);  // opcional, para seguimiento
     const url = limpio(d.url, 200);
+    const tipo = d.tipo === 'correccion' ? 'correccion' : 'resuelto';
+    const detalle = limpio(d.detalle, 500);
     const uid = req.auth?.uid || 'anon';
 
     // Rate-limit server-side: 1 solicitud por uid cada 60s (anti-spam, defensa real).
@@ -107,25 +110,33 @@ export const solicitarResolucion = onCall(
     }
     await marca.set({ ts: ahora });
 
+    const esCorr = tipo === 'correccion';
+    const titulo = esCorr ? 'Corrección / más detalles de un punto' : '¿Punto resuelto? — revisar y cerrar';
+    const intro = esCorr
+      ? 'Un usuario propone una corrección o aporta más detalles sobre este punto. Revísalo y actualízalo si procede.'
+      : 'Un usuario reporta que este punto ya está resuelto. Revísalo y, si procede, márcalo resuelto desde el Panel de coordinación.';
+    const especifico = esCorr
+      ? `<li><b>Corrección / detalle:</b> ${detalle || '—'}</li>`
+      : `<li><b>¿Por qué está resuelto?:</b> ${motivo || '—'}</li><li><b>¿Cómo lo sabe?:</b> ${fuente || '—'}</li>`;
     const html = `
-      <h2>¿Punto resuelto? — revisar y cerrar</h2>
-      <p>Un usuario reporta que este punto ya está resuelto. Revísalo y, si procede, márcalo resuelto desde el Panel de coordinación.</p>
+      <h2>${titulo}</h2>
+      <p>${intro}</p>
       <ul>
         <li><b>Punto:</b> ${sector || '—'}</li>
         <li><b>Categoría:</b> ${categoria || '—'} · <b>Urgencia:</b> ${urgencia || '—'}</li>
         <li><b>Descripción:</b> ${descripcion || '—'}</li>
-        <li><b>¿Por qué está resuelto?:</b> ${motivo || '—'}</li>
-        <li><b>¿Cómo lo sabe?:</b> ${fuente || '—'}</li>
+        ${especifico}
         <li><b>Contacto del reportante:</b> ${contacto || '—'}</li>
         <li><b>id:</b> ${id}</li>
         <li><b>Enlace al punto:</b> <a href="${url}">${url || '—'}</a></li>
         <li><b>uid:</b> ${uid}</li>
       </ul>`;
+    const subject = esCorr ? `Corrección: ${sector || id}` : `¿Resuelto? ${sector || id}`;
 
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY.value()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: REMITENTE, to: [DESTINO], subject: `¿Resuelto? ${sector || id}`, html })
+      body: JSON.stringify({ from: REMITENTE, to: [DESTINO], subject, html })
     });
     if (!res.ok) {
       logger.error('Resend (resolucion) falló', res.status, await res.text());

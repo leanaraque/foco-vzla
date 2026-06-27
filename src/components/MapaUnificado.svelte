@@ -56,6 +56,7 @@
     return `<div class="foco-acc">`
       + `<button type="button" class="foco-confirmar" data-id="${esc(n.id)}">${esc($t('pmapa.pop_confirmar'))}</button>`
       + `<button type="button" class="foco-resuelto" data-id="${esc(n.id)}">${esc($t('pmapa.pop_resuelto'))}</button>`
+      + `<button type="button" class="foco-corregir" data-id="${esc(n.id)}">${esc($t('pmapa.pop_corregir'))}</button>`
       + `</div>`;
   }
 
@@ -85,8 +86,10 @@
     }
     capaNec.addLayers(mN);
     capaRec.addLayers(mR);
-    // Encadrar a los datos solo en modo vista (sin pin) y si hay puntos.
-    if (!conPin && pts.length) mapa.fitBounds(pts, { padding: [28, 28], maxZoom: 14 });
+    // Encadrar a los datos solo si NO hay un foco pendiente (un punto seleccionado
+    // o enlace ?focus=); si lo hay, el fitBounds pisaría el vuelo al punto.
+    // animate:false → no deja una animación en curso que pise el vuelo a un punto.
+    if (!conPin && pts.length && !_focoPendiente) mapa.fitBounds(pts, { padding: [28, 28], maxZoom: 14, animate: false });
   }
   const esc = (s) => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 
@@ -136,8 +139,10 @@
       if (!el) return;
       const c = el.querySelector('.foco-confirmar');
       const r = el.querySelector('.foco-resuelto');
+      const x = el.querySelector('.foco-corregir');
       if (c && !c._wired) { c._wired = true; c.addEventListener('click', () => dispatch('confirmar', { id: c.dataset.id, btn: c })); }
       if (r && !r._wired) { r._wired = true; r.addEventListener('click', () => dispatch('resuelto', { id: r.dataset.id })); }
+      if (x && !x._wired) { x._wired = true; x.addEventListener('click', () => dispatch('corregir', { id: x.dataset.id })); }
     });
 
     listo = true;
@@ -148,18 +153,32 @@
   onDestroy(() => { if (mapa) mapa.remove(); });
 
   // Vuela al punto seleccionado en la lista y abre su popup (revela el clúster).
-  let _focoPrev = null;
+  // `_focoPendiente` se mantiene (sticky) hasta que el punto se muestra y el usuario
+  // arrastra el mapa: así el foco sobrevive a las recargas de datos (enlace ?focus=).
+  let _focoPrev = null, _focoPendiente = null, _focoGen = 0;
+  // Vuela al punto y abre su popup. En vez de depender de sacar el marker del clúster
+  // (que se re-agrupa y oculta el popup), abrimos un popup INDEPENDIENTE en la
+  // coordenada con el mismo contenido: siempre se muestra y sus botones se cablean
+  // igual (evento popupopen). Reintenta solo si el marker aún no existe (?focus=).
   function focar(f) {
-    const m = f && markerPorId.get(f.id);
-    if (!m || !mapa) return;
-    const grupo = m.options._grupo === 'rec' ? capaRec : capaNec;
-    try { grupo.zoomToShowLayer(m, () => m.openPopup()); }
-    catch (_) { mapa.setView(m.getLatLng(), 16); m.openPopup(); }
+    const gen = ++_focoGen;
+    const intentar = (intentos) => {
+      if (gen !== _focoGen || !mapa) return;             // lo reemplazó un foco más nuevo
+      const m = markerPorId.get(f.id);
+      if (!m) { if (intentos < 30) setTimeout(() => intentar(intentos + 1), 250); return; }
+      const ll = m.getLatLng();
+      mapa.setView(ll, 16, { animate: false }); // instantáneo: el autoPan del popup no lo interrumpe
+      const contenido = m.getPopup() ? m.getPopup().getContent() : '';
+      L.popup({ offset: [0, -6], autoPan: true, maxWidth: 280 }).setLatLng(ll).setContent(contenido).openOn(mapa);
+      // _focoPendiente queda fijo (sticky): suprime el fitBounds de redibujados
+      // posteriores y se reaplica el foco; se libera cuando el usuario arrastra.
+    };
+    intentar(0);
   }
 
   $: if (listo) { necesidades, recursos; dibujar(); }
   $: if (listo && conPin && centro && Number.isFinite(centro.lat)) colocar(centro.lat, centro.lng, 16);
-  $: if (listo && enfocado && enfocado !== _focoPrev) { _focoPrev = enfocado; setTimeout(() => focar(enfocado), 0); }
+  $: if (listo && enfocado && enfocado !== _focoPrev) { _focoPrev = enfocado; _focoPendiente = enfocado; focar(enfocado); }
 </script>
 
 <div class="mapa-wrap" style="--alto:{alto}">
@@ -209,5 +228,6 @@
   :global(.foco-acc button) { width: 100%; border: none; border-radius: 8px; padding: 0.5rem 0.6rem; font-weight: 700; font-size: 0.82rem; cursor: pointer; color: #fff; }
   :global(.foco-confirmar) { background: #0b3d5c; }
   :global(.foco-resuelto) { background: #2a9d54; }
+  :global(.foco-corregir) { background: #fff; color: #0b3d5c; border: 1px solid #0b3d5c; }
   :global(.foco-acc button:disabled) { opacity: 0.6; cursor: default; }
 </style>
