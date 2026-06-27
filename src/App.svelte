@@ -4,6 +4,7 @@
   import { online } from './lib/stores.js';
   import EmergencyBanner from './components/EmergencyBanner.svelte';
   import AvisoRescate from './components/AvisoRescate.svelte';
+  import AvisoReplicas from './components/AvisoReplicas.svelte';
   import Inicio from './routes/Inicio.svelte';
   import Mapa from './routes/Mapa.svelte';
   import Reportar from './routes/Reportar.svelte';
@@ -88,6 +89,9 @@
 
 <!-- AVISO CRÍTICO (vida en riesgo): silencio en zonas de rescate. DEBAJO del banner. -->
 <AvisoRescate />
+
+<!-- Aviso de réplicas: peligro en puentes e infraestructura. DEBAJO del de silencio. -->
+<AvisoReplicas />
 
 <main>
   {#if vista === 'inicio'}

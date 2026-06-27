@@ -7,12 +7,11 @@
 
 <div class="aviso" role="alert">
   <div class="inner">
-    <strong>Silencio en las zonas de rescate</strong>
+    <strong>Silencio en zonas de rescate activo</strong>
     <p>
-      <b>Equipos profesionales ya trabajan en La Guaira y alrededores.</b> El ruido y la
-      aglomeración impiden oír a posibles <b>sobrevivientes bajo los escombros</b>. Si estás
-      cerca, <b>haz silencio</b>; y si pensabas acudir, <b>evita acercarte</b>: menos gente,
-      menos ruido.
+      <b>Equipos profesionales ya están trabajando en el lugar.</b> El ruido y la aglomeración
+      impiden oír a posibles <b>sobrevivientes bajo los escombros</b>. Si estás cerca,
+      <b>haz silencio</b>; y si pensabas acudir, <b>evita acercarte</b>: menos gente, menos ruido.
     </p>
   </div>
 </div>
