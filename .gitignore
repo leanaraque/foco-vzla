@@ -6,6 +6,7 @@ dist/
 pglite-debug.log
 .env
 .env.*
+!.env.example
 serviceAccountKey.json
 .DS_Store
 .vite/

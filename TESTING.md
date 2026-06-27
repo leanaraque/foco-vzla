@@ -58,8 +58,9 @@ para cerrar el gate de Fase 1**, junto con el handoff §9-4 y reclutar coordinad
 |---|---|---|
 | 2.1 | Con CPU 4–6x slowdown (o teléfono real de gama baja), ve a **Reportar**. | — |
 | 2.2 | Cronometra desde que abres `/reportar` hasta el mensaje de confirmación. | **< 60 s.** |
-| 2.3 | Completa: categoría, urgencia, escribe un sector, descripción corta. | Los chips responden; el formulario no se traba. |
-| 2.4 | Pulsa "Usar mi ubicación" (opcional). | Permiso de GPS no bloquea el envío si lo rechazas. |
+| 2.3 | Completa el mínimo: **categoría**, **¿para quién?**, **¿cuántas personas?** y una **ubicación** (autocompletado de lugar, GPS o pin en el mapa). | Los chips responden; el formulario no se traba. La urgencia NO se pide: se deriva de las señales (§25.5). |
+| 2.4 | Según la categoría, completa los condicionales (rescate: ¿atrapados?/severidad; médico: tipo; agua/alimento/refugio: cantidad). | Los bloques condicionales aparecen/ocultan según la categoría elegida. |
+| 2.5 | Pulsa "Usar mi ubicación" (opcional) o marca un pin en el mapa. | Permiso de GPS no bloquea el envío si lo rechazas; el pin fija la ubicación exacta (privada). |
 
 **Evidencia:** tiempo total cronometrado. 📸 del mensaje de confirmación.
 
@@ -117,6 +118,29 @@ para cerrar el gate de Fase 1**, junto con el handoff §9-4 y reclutar coordinad
 
 ---
 
+## 7. Home como historia de datos (`/`)
+
+| Paso | Acción | Criterio |
+|---|---|---|
+| 7.1 | Abre la home `/`. | Carga el relato: hero → puertas (reportar / ver mapa) → pulso (cifras) → brecha por zona → composición → procedencia (fuentes). |
+| 7.2 | Pulsa una de las cifras del **pulso**. | Abre un modal con el mapa filtrado SOLO a esos puntos + su definición en lenguaje claro. |
+| 7.3 | Con red lenta, observa el primer pintado. | El shell aparece sin pantalla en blanco prolongada; los agregados se computan en cliente sobre lo cacheado. |
+
+---
+
+## 8. Mapa operativo público (`/mapa`)
+
+| Paso | Acción | Criterio |
+|---|---|---|
+| 8.1 | Abre `/mapa` (en móvil abre por defecto en el MAPA; en escritorio, lista + mapa). | Se ven los puntos clusterizados; la leyenda es legible. |
+| 8.2 | Prueba los filtros (tipo / categoría / urgencia / estado) y la búsqueda. | La lista y el mapa se filtran en conjunto. |
+| 8.3 | Clic en un punto de la lista. | El mapa **vuela** al punto y abre su popup. |
+| 8.4 | En el popup, prueba **Confirmar**. | Registra tu confirmación ciudadana (una vez por persona). |
+| 8.5 | En el popup, prueba **Resuelto** o **Corregir** (rellena el formulario). | Envía un aviso por correo al coordinador; NO cambia el dato en el mapa. |
+| 8.6 | Abre un enlace profundo `?focus=<id>`. | El mapa vuela a ese punto y abre su popup directamente. |
+
+---
+
 ## Plantilla de resultados (rellena y adjunta al gate)
 
 ```
@@ -128,6 +152,8 @@ Dispositivo / red: __________________________  Fecha: __________
 4. Lecturas offline (panel demo visible offline)                  [ ] OK
 5. Banner + verificación en todas las vistas                      [ ] OK
 6. Modo demo /panel?demo=1                                        [ ] OK
+7. Home `/` — relato + cifras del pulso clicables                 [ ] OK
+8. Mapa `/mapa` — filtros, vuelo al punto, Confirmar/Resuelto     [ ] OK
 
 Observaciones / fallos:
 __________________________________________________________________
