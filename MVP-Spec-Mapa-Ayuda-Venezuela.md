@@ -1084,3 +1084,32 @@ Color con propósito (rojo=necesidad, verde=recurso; el resto gris), una idea po
 - **No cruza con §25:** archivos nuevos de presentación; `App.svelte`/`i18n.js` solo aditivos. Si un agregado no existe en `db.js`, se computa en cliente (no se pide cambio de datos).
 - **Deploy:** `npm run deploy:hosting` (solo hosting; NO sube rules/functions). Requiere `.env.local` con `VITE_RECAPTCHA_SITE_KEY` (site key pública) en build, o App Check queda deshabilitado y Firestore (con enforcement) rechaza las lecturas → la home muestra ceros.
 - **Resiliente al curador:** la home refleja lo que digan los datos; hoy expone el sesgo conocido (casi todo `categoria=rescate`; acopio como `otro`) — se corrige solo cuando el curador del §25 tipifica.
+
+---
+
+## 27. Panel operativo de mapa `/mapa` — para quien aporta ayuda (26 jun 2026)
+
+> `/mapa` deja de ser un toggle lista↔mapa y pasa a ser un **panel de coordinación** con principios de mapas de organismos de respuesta (policía/rescate/comando de incidentes). Capa de presentación: consume `db.js` (read-only) + una callable de correo. Reutiliza `MapaUnificado` (no lo bifurca).
+
+### 27.1 Principios aplicados
+Conciencia situacional (franja de **KPIs**: críticas/rescate · sin atender · recursos) · **semántica de color consistente** mapa↔lista (rojo crítica → naranja alta → amarillo media · verde recurso · pulso SOS en rescate activo) · **triaje** (prioritario/aislado + rescate activo + urgencia arriba) · **control de capas/filtros** (tipo, categoría, urgencia, estado) + búsqueda · **estado por incidente** · **vigencia** del dato · **densidad** (clustering).
+
+### 27.2 Layout (mobile-first)
+- **Desktop (≥900px):** lista al costado + mapa pegajoso a la derecha (patrón refugiosvenezuela.com), ambos visibles.
+- **Móvil:** toggle Lista/Mapa; **abre por defecto en el MAPA**. El mapa se monta fresco al togglear (sin bug de tamaño de Leaflet).
+- Muestra TODAS las necesidades y recursos.
+
+### 27.3 Interacción con un punto
+- **Clic en un ítem de la lista → el mapa vuela al punto** y abre su popup. Se abre un popup INDEPENDIENTE en la coordenada (robusto: no depende de des-clusterizar el marker). Enlace profundo `?focus=<id>` (del correo) hace lo mismo al cargar.
+- **Acciones en el popup (comunidad):**
+  - **Confirmar que es real** → confirmación ciudadana existente (1 voto/uid; Cloud Function cuenta y transiciona a `confirmada`, §22.5).
+  - **Marcar como resuelto** → NO cambia el estado (solo un coordinador resuelve desde el Panel). Abre un formulario de validación (¿por qué? ¿cómo lo sabe? contacto) y **avisa por correo** a un coordinador.
+  - **Corregir o añadir detalles** → formulario de aporte; mismo canal de correo.
+
+### 27.4 Notificación por correo sin tocar datos (§27)
+Callable `solicitarResolucion` (en `functions/`, autorizada): Resend + App Check + rate-limit, con campo `tipo` ('resuelto' | 'correccion'). Anti-spam en cliente: **honeypot + límite local** (1/min) además del rate-limit server-side. El coordinador revisa y cierra/ajusta desde el Panel. Destino actual `hey@leanaraque.com` (remitente de prueba `onboarding@resend.dev`).
+
+### 27.5 Notas técnicas (aprendidas)
+- El `?focus=` fallaba porque el `fitBounds` ANIMADO pisaba el `setView` del vuelo. Fix: `fitBounds` instantáneo (`animate:false`), marcar el foco ANTES de cargar (suprime el auto-encuadre) y popup independiente.
+- Namespace i18n `pmapa.*` (NO `panel.*`, que es del Panel del coordinador).
+- Deploy: `firebase deploy --only hosting` + `--only functions:solicitarResolucion` (no toca el curador ni el resto). `leaflet.markercluster` debe estar instalado (`npm i` raíz) o el build falla.
