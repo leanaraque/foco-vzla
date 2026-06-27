@@ -254,6 +254,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // === SOLICITUDES DE LA COMUNIDAD (Resuelto / Corrección) =============
+    // Un usuario, desde el popup del mapa, avisa que un punto ya recibió ayuda
+    // ('resuelto') o aporta una corrección/detalle ('correccion'). Esto NO toca la
+    // necesidad: crea una SOLICITUD que el coordinador gestiona desde el Panel.
+    // Creación SOLO por la Cloud Function `solicitarResolucion` (Admin SDK, bypassa
+    // rules) → así el cliente pasa por App Check + rate-limit y no puede inyectar
+    // documentos arbitrarios. El coordinador la lee y solo muta campos de gestión.
+    function validGestionSolicitud(d, prev) {
+      return d.diff(prev).affectedKeys().hasOnly(['estado','nota','gestionada_en','gestionada_por'])
+        && isOneOf(d.estado, ['pendiente','gestionada','descartada'])
+        && (!('nota' in d) || (d.nota is string && d.nota.size() <= 300));
+    }
+    match /solicitudes/{id} {
+      allow read: if isCoord();
+      allow create: if false;                 // solo la Cloud Function (Admin SDK)
+      allow update: if isCoord() && validGestionSolicitud(request.resource.data, resource.data);
+      allow delete: if false;
+    }
+
     // === DEMO (datos ficticios para testeo 3G de Lean) =====================
     // Solo lectura pública (con App Check); escritura solo Admin SDK (bypass).
     // NUNCA contiene datos reales. Aislado de las colecciones de producción.

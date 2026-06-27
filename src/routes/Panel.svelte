@@ -2,8 +2,9 @@
   import { onDestroy } from 'svelte';
   import { t } from '../lib/i18n.js';
   import { user, esCoordinador, authListo, entrarCoordinador, salir } from '../lib/stores.js';
-  import { suscribirNecesidades } from '../lib/db.js';
+  import { suscribirNecesidades, suscribirSolicitudes } from '../lib/db.js';
   import NeedCard from '../components/NeedCard.svelte';
+  import SolicitudCard from '../components/SolicitudCard.svelte';
   import MapaUnificado from '../components/MapaUnificado.svelte';
   import CoordinatorForm from '../components/CoordinatorForm.svelte';
 
@@ -25,9 +26,31 @@
   let verNoVerificadas = false;
   let fCategoria = '';
   let fUrgencia = '';
-  let vista = 'lista'; // 'lista' | 'mapa'
+  let vista = 'lista'; // 'lista' | 'mapa' | 'solicitudes'
   let items = [];
   let unsub = null;
+
+  // --- solicitudes de la comunidad (Resuelto / Corrección) ---
+  let solicitudes = [];
+  let unsubSol = null;
+  let solArrancado = false, solIntentos = 0;
+  let verGestionadas = false;
+  $: solPendientes = solicitudes.filter((s) => (s.estado || 'pendiente') === 'pendiente');
+  $: solVisibles = verGestionadas ? solicitudes : solPendientes;
+
+  // Suscribe con reintento: el primer listener puede atacar con un token que aún no
+  // propagó el claim `coordinador` (carrera SDK↔auth) → permission-denied, que NO se
+  // reintenta solo. Re-suscribimos con el token ya asentado, unas pocas veces.
+  function subSolicitudes() {
+    if (unsubSol) { unsubSol(); unsubSol = null; }
+    unsubSol = suscribirSolicitudes(
+      (data) => (solicitudes = data),
+      () => {
+        if (unsubSol) { unsubSol(); unsubSol = null; }
+        if (solIntentos++ < 6) setTimeout(subSolicitudes, 1500);
+      }
+    );
+  }
 
   // Modo demo para el testeo 3G de Lean (datos ficticios, sin login de coord).
   const demo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
@@ -48,7 +71,13 @@
   // Re-suscribe cuando cambian los filtros (coordinador, o modo demo abierto).
   $: if ($esCoordinador || demo) { verNoVerificadas, fCategoria, fUrgencia; resuscribir(); }
 
-  onDestroy(() => unsub && unsub());
+  // Suscribe a las solicitudes de la comunidad (solo coordinador; las rules requieren
+  // rol). En modo demo no hay solicitudes reales, así que no se suscribe. Arranca una
+  // sola vez por sesión de coordinador; al cerrar sesión se limpia y se rearma.
+  $: if ($esCoordinador && !solArrancado) { solArrancado = true; solIntentos = 0; subSolicitudes(); }
+  $: if (!$esCoordinador && solArrancado) { if (unsubSol) { unsubSol(); unsubSol = null; } solArrancado = false; solicitudes = []; }
+
+  onDestroy(() => { unsub && unsub(); unsubSol && unsubSol(); });
 </script>
 
 <div class="contenedor">
@@ -100,18 +129,38 @@
       </label>
     </div>
 
-    <!-- Toggle lista / mapa -->
+    <!-- Toggle lista / mapa / solicitudes -->
     <div class="toggle">
       <button class:activo={vista === 'lista'} on:click={() => (vista = 'lista')}>{$t('panel.lista')}</button>
       <button class:activo={vista === 'mapa'} on:click={() => (vista = 'mapa')}>{$t('panel.mapa')}</button>
+      <button class:activo={vista === 'solicitudes'} on:click={() => (vista = 'solicitudes')}>
+        {$t('panel.solicitudes')}
+        {#if solPendientes.length}<span class="badge-num">{solPendientes.length}</span>{/if}
+      </button>
     </div>
 
-    {#if vista === 'mapa'}
+    {#if vista === 'solicitudes'}
+      <h2 class="sub">{$t('sol.titulo')}</h2>
+      <p class="intro-seg">{$t('sol.intro')}</p>
+      <label class="check">
+        <input type="checkbox" bind:checked={verGestionadas} />
+        {$t('sol.ver_gestionadas')}
+      </label>
+      {#if solVisibles.length === 0}
+        <p class="ayuda">{$t('sol.vacio')}</p>
+      {:else}
+        {#each solVisibles as s (s.id)}
+          <SolicitudCard {s} />
+        {/each}
+      {/if}
+
+    {:else if vista === 'mapa'}
       {#if items.length}
         <MapaUnificado necesidades={items} />
       {:else}
         <p class="ayuda">{$t('panel.vacio')}</p>
       {/if}
+
     {:else}
       {#if items.length === 0}
         <p class="ayuda">{$t('panel.vacio')}</p>
@@ -131,6 +180,10 @@
   .check { display: flex; align-items: center; gap: 0.4rem; font-weight: 600; margin: 0; width: 100%; }
   .check input { width: auto; }
   .toggle { display: flex; gap: 0.4rem; margin: 0.6rem 0; }
-  .toggle button { flex: 1; }
+  .toggle button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; }
   .toggle button.activo { background: var(--azul); color: #fff; }
+  .badge-num { background: #e63946; color: #fff; font-size: 0.72rem; font-weight: 800;
+    min-width: 1.1rem; height: 1.1rem; padding: 0 0.25rem; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+  .sub { margin: 0.4rem 0 0.2rem; }
 </style>

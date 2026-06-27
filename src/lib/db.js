@@ -321,3 +321,25 @@ export async function leerContacto(necesidadId) {
   const snap = await getDoc(doc(db, 'necesidades', necesidadId, 'privado', 'datos'));
   return snap.exists() ? snap.data() : null;
 }
+
+// --- Solicitudes de la comunidad (Resuelto / Corrección) ----------------
+// Las crea la Cloud Function `solicitarResolucion` (Admin SDK). Aquí el coordinador
+// las LEE (suscripción acotada) y las GESTIONA (estado de gestión). Se ordena por
+// recencia y se filtra el estado en cliente para NO requerir índice compuesto.
+// `onError` permite al Panel reintentar: el listener puede engancharse con un token
+// que aún no propagó el claim `coordinador` (carrera SDK↔auth) → permission-denied,
+// que Firestore NO reintenta solo.
+export function suscribirSolicitudes(cb, onError) {
+  const q = query(collection(db, 'solicitudes'), orderBy('creada_en', 'desc'), limit(80));
+  return onSnapshot(q, (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
+}
+
+// Marca una solicitud como gestionada o descartada (solo coord; lo enforcan las rules).
+export function gestionarSolicitud(id, estado, nota = '') {
+  return updateDoc(doc(db, 'solicitudes', id), {
+    estado,
+    nota,
+    gestionada_por: auth.currentUser?.uid ?? null,
+    gestionada_en: serverTimestamp()
+  });
+}

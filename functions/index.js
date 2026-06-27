@@ -78,11 +78,14 @@ export const solicitarCoordinador = onCall(
   }
 );
 
-// === Solicitud de revisión (Resuelto / Corrección) → email al coordinador ====
-// Callable: un usuario propone que un punto ya está resuelto (tipo 'resuelto') o
-// aporta una corrección/más detalles (tipo 'correccion'). NO cambia datos ni estado
-// (eso solo lo hace un coordinador desde el Panel); solo NOTIFICA por correo con los
-// detalles + las respuestas. App Check obligatorio + rate-limit (anti-spam).
+// === Solicitud de la comunidad (Resuelto / Corrección) → cola del Panel =======
+// Callable: un usuario propone que un punto ya recibió ayuda (tipo 'resuelto') o
+// aporta una corrección/más detalles (tipo 'correccion'). NO cambia la necesidad ni
+// su estado (eso solo lo hace un coordinador desde el Panel). FUENTE DE VERDAD: se
+// PERSISTE una solicitud en `solicitudes` (Admin SDK → bypassa rules; el cliente no
+// puede escribirla directo) para que el coordinador la GESTIONE desde el Panel.
+// Además avisa por correo (best-effort: si Resend falla, la solicitud ya quedó
+// guardada y NO se pierde). App Check obligatorio + rate-limit (anti-spam).
 export const solicitarResolucion = onCall(
   { secrets: [RESEND_API_KEY], enforceAppCheck: true, region: 'us-central1', cors: true },
   async (req) => {
@@ -93,7 +96,7 @@ export const solicitarResolucion = onCall(
     const categoria = limpio(d.categoria, 40);
     const urgencia = limpio(d.urgencia, 20);
     const descripcion = limpio(d.descripcion, 500);
-    const motivo = limpio(d.motivo, 200);     // ¿por qué cree que está resuelto?
+    const motivo = limpio(d.motivo, 200);     // ¿por qué cree que fue atendido?
     const fuente = limpio(d.fuente, 120);      // ¿cómo lo sabe?
     const contacto = limpio(d.contacto, 120);  // opcional, para seguimiento
     const url = limpio(d.url, 200);
@@ -110,38 +113,54 @@ export const solicitarResolucion = onCall(
     }
     await marca.set({ ts: ahora });
 
-    const esCorr = tipo === 'correccion';
-    const titulo = esCorr ? 'Corrección / más detalles de un punto' : '¿Punto resuelto? — revisar y cerrar';
-    const intro = esCorr
-      ? 'Un usuario propone una corrección o aporta más detalles sobre este punto. Revísalo y actualízalo si procede.'
-      : 'Un usuario reporta que este punto ya está resuelto. Revísalo y, si procede, márcalo resuelto desde el Panel de coordinación.';
-    const especifico = esCorr
-      ? `<li><b>Corrección / detalle:</b> ${detalle || '—'}</li>`
-      : `<li><b>¿Por qué está resuelto?:</b> ${motivo || '—'}</li><li><b>¿Cómo lo sabe?:</b> ${fuente || '—'}</li>`;
-    const html = `
-      <h2>${titulo}</h2>
-      <p>${intro}</p>
-      <ul>
-        <li><b>Punto:</b> ${sector || '—'}</li>
-        <li><b>Categoría:</b> ${categoria || '—'} · <b>Urgencia:</b> ${urgencia || '—'}</li>
-        <li><b>Descripción:</b> ${descripcion || '—'}</li>
-        ${especifico}
-        <li><b>Contacto del reportante:</b> ${contacto || '—'}</li>
-        <li><b>id:</b> ${id}</li>
-        <li><b>Enlace al punto:</b> <a href="${url}">${url || '—'}</a></li>
-        <li><b>uid:</b> ${uid}</li>
-      </ul>`;
-    const subject = esCorr ? `Corrección: ${sector || id}` : `¿Resuelto? ${sector || id}`;
-
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${RESEND_API_KEY.value()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: REMITENTE, to: [DESTINO], subject, html })
+    // (1) PERSISTIR la solicitud → cola del Panel (fuente de verdad). Nace 'pendiente'.
+    await db.collection('solicitudes').add({
+      tipo,                          // 'resuelto' | 'correccion'
+      necesidadId: id,
+      sector, categoria, urgencia, descripcion,
+      motivo, fuente,                // específicos de 'resuelto'
+      detalle,                       // específico de 'correccion'
+      contacto, url, uid,
+      estado: 'pendiente',
+      creada_en: FieldValue.serverTimestamp()
     });
-    if (!res.ok) {
-      logger.error('Resend (resolucion) falló', res.status, await res.text());
-      throw new HttpsError('internal', 'No se pudo enviar el correo.');
+
+    // (2) Avisar por correo — BEST-EFFORT: la solicitud ya quedó guardada; si el
+    // correo falla, NO devolvemos error (no se pierde nada; se gestiona en el Panel).
+    try {
+      const esCorr = tipo === 'correccion';
+      const titulo = esCorr ? 'Corrección / más detalles de un punto' : 'Aviso: ya recibieron ayuda — revisar y cerrar';
+      const intro = esCorr
+        ? 'Un usuario propone una corrección o aporta más detalles sobre este punto. Revísalo en el Panel y actualízalo si procede.'
+        : 'Un usuario reporta que este punto ya recibió ayuda. Revísalo en el Panel y, si procede, márcalo resuelto.';
+      const especifico = esCorr
+        ? `<li><b>Corrección / detalle:</b> ${detalle || '—'}</li>`
+        : `<li><b>¿Por qué fue atendido?:</b> ${motivo || '—'}</li><li><b>¿Cómo lo sabe?:</b> ${fuente || '—'}</li>`;
+      const html = `
+        <h2>${titulo}</h2>
+        <p>${intro}</p>
+        <ul>
+          <li><b>Punto:</b> ${sector || '—'}</li>
+          <li><b>Categoría:</b> ${categoria || '—'} · <b>Urgencia:</b> ${urgencia || '—'}</li>
+          <li><b>Descripción:</b> ${descripcion || '—'}</li>
+          ${especifico}
+          <li><b>Contacto del reportante:</b> ${contacto || '—'}</li>
+          <li><b>id:</b> ${id}</li>
+          <li><b>Enlace al punto:</b> <a href="${url}">${url || '—'}</a></li>
+          <li><b>uid:</b> ${uid}</li>
+        </ul>
+        <p>Gestiónalo en el Panel: solicitudes de la comunidad.</p>`;
+      const subject = esCorr ? `Corrección: ${sector || id}` : `Ya recibieron ayuda: ${sector || id}`;
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${RESEND_API_KEY.value()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: REMITENTE, to: [DESTINO], subject, html })
+      });
+      if (!res.ok) logger.warn('Resend (solicitud) no envió', res.status, await res.text());
+    } catch (e) {
+      logger.warn('Resend (solicitud) lanzó, se ignora (solicitud ya guardada)', e?.message || e);
     }
+
     return { ok: true };
   }
 );
