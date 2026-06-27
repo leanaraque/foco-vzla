@@ -35,6 +35,58 @@
       ]
     },
     {
+      "collectionGroup": "necesidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "verificacion", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "necesidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "verificacion", "order": "ASCENDING" },
+        { "fieldPath": "urgencia", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "necesidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "verificacion", "order": "ASCENDING" },
+        { "fieldPath": "categoria", "order": "ASCENDING" },
+        { "fieldPath": "urgencia", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "necesidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "categoria", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "necesidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "urgencia", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "necesidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "categoria", "order": "ASCENDING" },
+        { "fieldPath": "urgencia", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "recursos",
       "queryScope": "COLLECTION",
       "fields": [
