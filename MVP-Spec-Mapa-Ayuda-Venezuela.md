@@ -1113,3 +1113,61 @@ Callable `solicitarResolucion` (en `functions/`, autorizada): Resend + App Check
 - El `?focus=` fallaba porque el `fitBounds` ANIMADO pisaba el `setView` del vuelo. Fix: `fitBounds` instantáneo (`animate:false`), marcar el foco ANTES de cargar (suprime el auto-encuadre) y popup independiente.
 - Namespace i18n `pmapa.*` (NO `panel.*`, que es del Panel del coordinador).
 - Deploy: `firebase deploy --only hosting` + `--only functions:solicitarResolucion` (no toca el curador ni el resto). `leaflet.markercluster` debe estar instalado (`npm i` raíz) o el build falla.
+
+---
+
+## 28. Pipeline de ingesta recurrente — fuentes externas sin duplicar (27 jun 2026)
+
+> Construido contra el plan aprobado por el operador. Implementa el **pipeline recurrente del §25.8**: mantiene `necesidades`/`recursos` actualizados desde varias fuentes externas, **idempotente** (re-ingerir no duplica), **staging-first** con **compuerta de operador** para PII/dudoso, preservando toda guarda de privacidad/costo y la **línea roja** (ciudadano > confirmado-multitud > lote masivo). **El gate NO lo cierra el agente.**
+
+### 28.1 Arquitectura (Cloud Functions)
+`ingesta` (`onSchedule` cada 180 min) corre cada **adapter** aislado → escribe a **`_ingesta_staging`** (una colección, doc id determinista **`sistema__id_externo`** → upsert) → el **promotor** concilia staging → canónico por **identidad (`fuentes[]`)** y luego **dedup** (proximidad/nombre, reusa `clusters`/`rankCanon` del curador) → auto-promueve lo estructurado/sin PII, y manda lo dudoso o con **PII** a `_revision_ingesta` (compuerta del operador). Watermark por fuente en `_ingesta_estado` (ingesta incremental; solo avanza tras escribir → resumible).
+
+### 28.2 Núcleo anti-duplicados
+- **Identidad estable** → `stagingId(sistema,id_externo)`; fuentes sin id (comentarios) usan `idExternoDeEntidad` (hash de nombre+sector). Re-ingesta = upsert, nunca doc nuevo.
+- **`fuentes[]` (§25.3)** acumula procedencia `{sistema,id_externo,capturado_en,url}` sin repetir; sustituye al `creador=<TAG>` y habilita reversión.
+- **Promotor** no toca la gestión del operador (`estado`/`verificacion`/`reclamada_por`) ni sobrescribe el contenido de un **ciudadano** (solo le adjunta la fuente). El dedup cross-source exhaustivo lo sigue haciendo el **curador** agendado.
+
+### 28.3 Refactor compartido (sin duplicar lógica)
+El motor de prioridad y el dedup salieron de `curador.js` a `functions/lib/{prioridad,dedup}.js`, compartidos con el promotor. Nuevos módulos puros: `functions/lib/{identidad,scrubPII,geo,geocode,staging,recolector,promocion}.js`. `firestore.rules`: `_ingesta_staging/_ingesta_estado/_ingesta_fuentes/_revision_ingesta` → **lectura solo coordinador, escritura solo Admin SDK** (el staging puede traer `privado.contacto`).
+
+### 28.4 Calificación de fuentes (investigadas en vivo)
+Califican: **terremotovenezuela.com** (ya), **rescate-ve.vercel.app** (ALTA: `/api/external-points`, centros→recursos + puntos→necesidades, IDs UUID + `updated_at`), **ayudavenezuela.app**, **ayudaparavenezuela.com** y **refugiosvenezuela.com** (Supabase, pendiente capturar anon key por panel de red — ver `functions/adapters/PENDIENTES.md`). Descartadas por **alcance/PII §3/§9-1**: desaparecidos (venezuelareporta/venezuelatebusca/desaparecidos/tiltely), **pacientes** (pacientesterremotovzla), **mascotas** (huellascan). Descartadas por **términos** (revisatuedificio prohíbe scraping) o por ser **servicio privado** (tilin/habitable) o **proxy OSM** ya cubierto (zonasegura).
+
+### 28.5 Evidencia
+- **Tests: 111 unit + 63 rules** (incluye 6 nuevos de las colecciones de ingesta) — verdes.
+- **Idempotencia (emulador, `functions/test-idempotencia.mjs`):** RUN1 crea; **RUN2 sin cambios → creados=0, saltados=4 (cero duplicados)**; RUN3 con cambio → actualiza el canónico vinculado (no duplica) y conserva `fuentes[]`.
+- **Reconciliación dry-run contra producción** (`scripts/migrar-fuentes.mjs`, read-only): 772 canónicos recibirían `fuentes[]`; el primer run crearía ~340 nuevos (rescate-ve aporta 242). Valida el emparejamiento con datos reales.
+
+### 28.6 Estado del gate (pendiente)
+| Estado | Ítem |
+|---|---|
+| ✅ | Código + tests (unit/rules/idempotencia) + reconciliación dry-run |
+| ⏳ | **Auditoría del jurado** (rules de ingesta, honestidad del dedup, costo, línea roja/PII) |
+| ⏳ | **Verificación en vivo** sobre focovenezuela.org con chrome-devtools (estaba ocupado por otro Chrome) |
+| ⏳ | **Test de Lean** + decisión de **alcance** (rescate-ve trae acopio nacional, no solo zona del sismo) |
+| ⛔ | **No desplegado:** el scheduler no se activa ni se corre `--apply`/ingesta real contra producción hasta el visto bueno del jurado + Lean |
+| ⛔ | Capturar anon key de las 2 fuentes Supabase (panel de red) antes de activarlas |
+
+**El gate NO se da por cerrado por el agente.** Nada desplegado ni datos reales modificados; todo en código + emulador + dry-run read-only.
+
+### 28.7 DESPLEGADO A PRODUCCIÓN — primer run (27 jun 2026)
+
+> Por **decisión del operador (Lean)**, el pipeline se desplegó a producción (supersede el "No desplegado" de §28.6). Despliegue metódico, probando en cada paso y reversible.
+
+**Desplegado:** `firestore.rules` (añade `_ingesta_*`, aditivo) + Cloud Functions `curador` (refactor) e `ingesta` (nueva, agendada cada 180 min). Las demás funciones, intactas.
+
+**Bug de rendimiento corregido en caliente:** el promotor hacía escrituras **secuenciales** (~2400 round-trips) → excedía el timeout de 540s y Pub/Sub re-entregaba (progreso a tirones, sin corromper por idempotencia). Se **batcheó** (≤400 escrituras/commit, como el curador) → el run completa en un solo invoke.
+
+**Primer run (ingesta, promotor batcheado):** `staging 1210 | creados 182 | actualizados 644 | en revisión 1 | saltados 383`. Neto: **necesidades 759→880, recursos 280→538** (+379, rescate-ve aporta ~229 recursos). `fuentes[]` estampada en **666 necesidades + 488 recursos** (identidad para runs futuros).
+
+**Guardas verificadas en vivo:**
+- **Compuerta PII:** 1 reporte TVAPP con teléfono → `_revision_ingesta` (NO publicado). El pipeline atrapa PII que el import manual viejo dejaba pasar.
+- **Curador en prod:** corrió e **idempotente** (run 1: 666 enriquecidos + 10 dup marcados; run 2: 0 cambios). El dedup colapsó 10 near-duplicados del ingest (sin explosión).
+- **Línea roja / propiedad:** una fuente solo refresca el contenido de sus propios docs; a los demás solo les adjunta `fuentes[]`.
+
+**Hallazgo de moderación (preexistente, NO del pipeline):** un doc `creador=TVAPP_NEC` (import manual viejo, **sin `fuentes[]` → intacto**) tiene en su descripción pública un teléfono + nombre de familiar ("…04120921730 soy Beatriz su familiar…"). Es backlog de moderación §9-1/§24.6 del operador; el pipeline nuevo ya lo gatearía. **Recomendado: barrido único de PII sobre descripciones públicas legacy.**
+
+**Activo:** `firebase-schedule-ingesta-us-central1` ENABLED (cada 180 min) → frescura automática.
+
+**Pendiente del gate:** auditoría del jurado; verificación en vivo con chrome-devtools (estaba ocupado); decisión de **alcance** (rescate-ve trae acopio nacional); capturar anon key de las 2 fuentes Supabase. **Reversible:** los docs nuevos llevan `creador` por fuente (`RESCATE_VE`, etc.) → borrables; `fuentes[]` es aditivo.

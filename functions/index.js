@@ -220,3 +220,7 @@ export const marcarAislados = onSchedule(
 // (enriquece, recalcula prioridad con frescura, deduplica conservador + cola de
 // revisión). Vive en su propio módulo por tamaño.
 export { curador } from './curador.js';
+
+// === Ingesta agendada (Plan): jala las fuentes externas a staging (upsert
+// idempotente) y promueve a `necesidades`/`recursos` sin duplicar. Vive en su módulo.
+export { ingesta } from './ingesta.js';

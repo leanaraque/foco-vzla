@@ -294,3 +294,42 @@ describe('privado — escritura abusiva [F1]', () => {
     await assertFails(setDoc(doc(anon('anon1'), 'necesidades/p1/privado/datos'), privado('anon1', { geo_exacta: { lat: 'x', lng: 'y' } })));
   });
 });
+
+describe('ingesta — staging/estado/fuentes/revisión (solo Admin escribe, solo coord lee)', () => {
+  // El pipeline escribe SOLO por Cloud Function (Admin SDK, bypassa rules). Desde el
+  // cliente: lectura solo coordinador (el staging puede traer `privado.contacto`),
+  // escritura denegada a todos.
+  beforeEach(async () => {
+    await seed((db) => Promise.all([
+      setDoc(doc(db, '_ingesta_staging/TV_EDIF__77'), { sistema: 'TV_EDIF', destino: 'necesidad', publico: { categoria: 'rescate' }, privado: { contacto: '0414-1234567' } }),
+      setDoc(doc(db, '_ingesta_estado/TV_EDIF'), { ultimo_capturado_en: 123 }),
+      setDoc(doc(db, '_ingesta_fuentes/TV_EDIF'), { sistema: 'TV_EDIF' }),
+      setDoc(doc(db, '_revision_ingesta/TV_EDIF__77'), { motivo: 'pii' })
+    ]));
+  });
+
+  test('coordinador SÍ lee el staging (incluye privado)', async () => {
+    await assertSucceeds(getDoc(doc(coord(), '_ingesta_staging/TV_EDIF__77')));
+  });
+  test('usuario normal NO lee el staging', async () => {
+    await assertFails(getDoc(doc(normal(), '_ingesta_staging/TV_EDIF__77')));
+  });
+  test('reportante anónimo NO lee el staging (contacto sensible)', async () => {
+    await assertFails(getDoc(doc(anon(), '_ingesta_staging/TV_EDIF__77')));
+  });
+  test('nadie (ni coordinador) escribe el staging — solo Admin SDK', async () => {
+    await assertFails(setDoc(doc(coord(), '_ingesta_staging/hack'), { x: 1 }));
+    await assertFails(setDoc(doc(anon(), '_ingesta_staging/hack2'), { x: 1 }));
+  });
+  test('coordinador lee estado/fuentes/revisión; el público no', async () => {
+    await assertSucceeds(getDoc(doc(coord(), '_ingesta_estado/TV_EDIF')));
+    await assertSucceeds(getDoc(doc(coord(), '_ingesta_fuentes/TV_EDIF')));
+    await assertSucceeds(getDoc(doc(coord(), '_revision_ingesta/TV_EDIF__77')));
+    await assertFails(getDoc(doc(normal(), '_ingesta_estado/TV_EDIF')));
+    await assertFails(getDoc(doc(anon(), '_revision_ingesta/TV_EDIF__77')));
+  });
+  test('nadie escribe estado/fuentes/revisión — solo Admin SDK', async () => {
+    await assertFails(setDoc(doc(coord(), '_ingesta_estado/hack'), { x: 1 }));
+    await assertFails(setDoc(doc(coord(), '_revision_ingesta/hack'), { x: 1 }));
+  });
+});
