@@ -3,6 +3,7 @@
   import { t } from './lib/i18n.js';
   import { online } from './lib/stores.js';
   import EmergencyBanner from './components/EmergencyBanner.svelte';
+  import AvisoRescate from './components/AvisoRescate.svelte';
   import Inicio from './routes/Inicio.svelte';
   import Mapa from './routes/Mapa.svelte';
   import Reportar from './routes/Reportar.svelte';
@@ -84,6 +85,9 @@
 
 <!-- Banner permanente (Spec §5 y DoD §8): visible en TODAS las vistas -->
 <EmergencyBanner />
+
+<!-- AVISO CRÍTICO (vida en riesgo): silencio en zonas de rescate. DEBAJO del banner. -->
+<AvisoRescate />
 
 <main>
   {#if vista === 'inicio'}
