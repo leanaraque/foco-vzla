@@ -228,6 +228,8 @@
   :global(.foco-acc button) { width: 100%; border: none; border-radius: 8px; padding: 0.5rem 0.6rem; font-weight: 700; font-size: 0.82rem; cursor: pointer; color: #fff; }
   :global(.foco-confirmar) { background: #0b3d5c; }
   :global(.foco-resuelto) { background: #2a9d54; }
-  :global(.foco-corregir) { background: #fff; color: #0b3d5c; border: 1px solid #0b3d5c; }
+  /* Especificidad (0,2,1) para ganarle a `.foco-acc button` (0,1,1), que si no
+     impone color:#fff + border:none y deja el botón blanco-sobre-blanco invisible. */
+  :global(.foco-acc button.foco-corregir) { background: #fff; color: #0b3d5c; border: 1px solid #0b3d5c; }
   :global(.foco-acc button:disabled) { opacity: 0.6; cursor: default; }
 </style>
