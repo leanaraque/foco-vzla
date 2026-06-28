@@ -2,6 +2,7 @@
 // observados en producción (TV_EDIF, IG_SENSEI, RESCATE_VE, TVAPP, ciudadanos).
 import { describe, it, expect } from 'vitest';
 import { extraer, extraerSeveridad, extraerNecesidades } from '../functions/lib/extraer.js';
+import { resumenDeterminista, construirEntradaIA, resumenIA } from '../functions/lib/resumen.js';
 
 describe('extraer — severidad', () => {
   it('"Daño parcial/total/severo" → severidad', () => {
@@ -71,5 +72,60 @@ describe('extraer — registro completo (patrones reales)', () => {
     expect(r.rescate_activo).toBe(true);
     // la extracción NO emite el nombre (solo campos tipados) → sin PII
     expect(JSON.stringify(r)).not.toMatch(/Sahin|Brice/);
+  });
+});
+
+describe('resumen — determinístico (fallback seguro, sin LLM)', () => {
+  it('arma un resumen claro desde los campos tipados', () => {
+    const campos = extraer({ categoria: 'rescate', descripcion: 'Reportes ciudadanos (46): señales de vida · personas atrapadas. Afectados: 9.', sector: 'Belo Horizonte · playa grande' });
+    const r = resumenDeterminista(campos, 'Belo Horizonte · playa grande');
+    expect(r).toContain('Belo Horizonte');
+    expect(r).toContain('Rescate activo');
+    expect(r).toContain('personas atrapadas');
+    expect(r).toContain('9 afectados');
+  });
+  it('necesidades de insumos sin rescate', () => {
+    const campos = extraer({ categoria: 'agua', descripcion: 'Necesita: agua, alimentos.', sector: 'Morón' });
+    expect(resumenDeterminista(campos, 'Morón')).toMatch(/necesita: agua/i);
+  });
+  it('sin señales → algo útil por categoría', () => {
+    expect(resumenDeterminista({ categoria: 'rescate', senales: {} }, 'Edif X')).toMatch(/afectado|reportad/i);
+  });
+});
+
+describe('resumen — IA anclada (fetch mockeado) + guardas', () => {
+  const rec = { sector: 'Belo Horizonte · playa grande', descripcion: 'señales de vida, personas atrapadas. Afectados: 9' };
+  const campos = extraer(rec);
+
+  it('construirEntradaIA incluye campos y SANEA teléfono/cédula del texto', () => {
+    const e = construirEntradaIA({ sector: 'Edif X', descripcion: 'contacto 0412-1234567, cédula 12345678' }, campos);
+    expect(e).toContain('Campos estructurados');
+    expect(e).not.toContain('0412-1234567');
+    expect(e).not.toMatch(/c[ée]dula 12345678/i);
+  });
+
+  it('sin apiKey → cae al determinístico', async () => {
+    const { via } = await resumenIA(rec, campos, {});
+    expect(via).toBe('reglas');
+  });
+
+  it('respuesta válida de la IA → la usa', async () => {
+    const fetchImpl = async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Belo Horizonte: personas atrapadas con señales de vida, daño total, 9 afectados.' }] }) });
+    const { resumen, via, ok } = await resumenIA(rec, campos, { apiKey: 'k', fetchImpl });
+    expect(via).toBe('ia');
+    expect(ok).toBe(true);
+    expect(resumen).toContain('atrapadas');
+  });
+
+  it('si la IA devuelve PII → descarta y usa el determinístico (guarda §9-1)', async () => {
+    const fetchImpl = async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Llamar al 0414-5556677, María atrapada.' }] }) });
+    const { via } = await resumenIA(rec, campos, { apiKey: 'k', fetchImpl });
+    expect(via).toBe('reglas');
+  });
+
+  it('error de la API → determinístico, nunca lanza', async () => {
+    const fetchImpl = async () => ({ ok: false, json: async () => ({}) });
+    const { via } = await resumenIA(rec, campos, { apiKey: 'k', fetchImpl });
+    expect(via).toBe('reglas');
   });
 });
