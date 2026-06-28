@@ -1225,6 +1225,9 @@ Endpoint HTTP de **solo lectura** servido en `focovenezuela.org/api/**` (rewrite
 | CDN | request 1 `X-Cache: MISS`, requests 2–3 `X-Cache: HIT` (origen no tocado) |
 | PII | sin contacto ni coords exactas; `descripcion` usa el `resumen` saneado |
 
+### 30.5 Descubribilidad — página de documentación + link en el footer
+Para que la API sea encontrable sin ser intrusiva: una **página estática** `public/api.html` (autocontenida, sin emojis, peso ~0 sobre el bundle) documenta endpoints, campos, ejemplo `fetch`, privacidad y el aviso de "no es servicio de emergencia". Se enlaza desde el footer con un **link discreto** "API de datos" (junto a Sugerencias / Descargar CSV / Código abierto), `href="/api.html"`. Como `api.html` es un archivo real en `dist`, Hosting lo sirve directo (no lo pisa el rewrite SPA). Verificado en vivo: la página carga y el link aparece en el footer.
+
 Desplegado (`functions:api` + `hosting`). **Consideración de privacidad (backlog §28.7):** el barrido único de PII sobre descripciones públicas legacy sigue recomendado — la API amplifica el alcance de cualquier PII que aún quede en una `descripcion` sin `resumen`.
 
 > **Pendiente acordado (siguiente pieza):** exactitud de coordenadas — surfacing de la cola `_procesar_revision` (conflictos de geo que el `procesador` ya detecta pero nadie revisa) en el Panel, + endurecer la geocodificación. Es el mayor arreglo real de precisión con menos esfuerzo.

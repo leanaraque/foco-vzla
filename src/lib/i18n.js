@@ -19,6 +19,8 @@ const diccionarios = {
     'footer.csv_cargando': 'Preparando…',
     'footer.repo': 'Código abierto',
     'footer.repo_desc': 'Este proyecto es de código abierto. Míralo o despliega el tuyo.',
+    'footer.api': 'API de datos',
+    'footer.api_desc': 'API pública de datos abiertos (JSON/CSV) para desarrolladores y medios.',
 
     'nav.inicio': 'Inicio',
     'nav.mapa': 'Mapa',

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FOCO Venezuela — API de datos abiertos</title>
+  <meta name="description" content="API pública de datos abiertos de FOCO Venezuela: necesidades y recursos tras el sismo, en JSON y CSV. Solo lectura, sin datos personales." />
+  <style>
+    :root { --azul: #0b3d5c; --gris: #5b6670; --borde: #e2e6ea; --bg: #f7f9fb; --rojo: #e63946; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #1c2530; background: var(--bg); margin: 0; line-height: 1.55;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 1.4rem 1.1rem 4rem; }
+    header { border-bottom: 2px solid var(--azul); padding-bottom: 0.8rem; margin-bottom: 1.4rem; }
+    h1 { font-size: 1.5rem; margin: 0 0 0.2rem; color: var(--azul); }
+    .sub { color: var(--gris); font-size: 0.95rem; }
+    h2 { font-size: 1.12rem; margin: 1.8rem 0 0.6rem; color: var(--azul); }
+    p { margin: 0.5rem 0; }
+    a { color: var(--azul); }
+    code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    code { background: #eef2f5; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.88em; }
+    pre {
+      background: #0b1f2c; color: #d7e3ea; padding: 0.9rem 1rem; border-radius: 8px;
+      overflow-x: auto; font-size: 0.82rem; line-height: 1.5;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 0.6rem 0; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--borde); vertical-align: top; }
+    th { background: #eef2f5; font-weight: 700; }
+    td code { white-space: nowrap; }
+    .aviso { background: #fff4f4; border: 1px solid #f3c6c9; border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.92rem; }
+    .nota { background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 0.8rem 1rem; margin: 1rem 0; font-size: 0.92rem; }
+    .pills a {
+      display: inline-block; margin: 0.2rem 0.4rem 0.2rem 0; padding: 0.35rem 0.7rem;
+      background: #fff; border: 1px solid var(--borde); border-radius: 999px;
+      text-decoration: none; font-size: 0.88rem; font-weight: 600;
+    }
+    footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--borde); font-size: 0.85rem; color: var(--gris); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>FOCO Venezuela — API de datos abiertos</h1>
+      <div class="sub">Datos públicos de necesidades y recursos tras el doblete sísmico. Solo lectura, sin datos personales.</div>
+    </header>
+
+    <div class="aviso">
+      <strong>No es un servicio de emergencia.</strong> FOCO coordina información de ayuda ciudadana; no garantiza respuesta ni rescate. Ante peligro inmediato, contacta a las autoridades.
+    </div>
+
+    <p>
+      Estos datos son abiertos para que medios, ONGs, otros mapas e investigadores los usen.
+      <strong>Uso libre con atribución a <a href="https://focovenezuela.org">focovenezuela.org</a>.</strong>
+      Las respuestas se sirven sobre <code>HTTPS</code>, con <code>CORS</code> abierto y cacheadas ~5 minutos.
+    </p>
+
+    <h2>Endpoints</h2>
+    <table>
+      <thead><tr><th>Recurso</th><th>Formato</th><th>URL</th></tr></thead>
+      <tbody>
+        <tr><td>Necesidades</td><td>JSON</td><td><a href="/api/necesidades.json"><code>/api/necesidades.json</code></a></td></tr>
+        <tr><td>Necesidades</td><td>CSV</td><td><a href="/api/necesidades.csv"><code>/api/necesidades.csv</code></a></td></tr>
+        <tr><td>Recursos</td><td>JSON</td><td><a href="/api/recursos.json"><code>/api/recursos.json</code></a></td></tr>
+        <tr><td>Recursos</td><td>CSV</td><td><a href="/api/recursos.csv"><code>/api/recursos.csv</code></a></td></tr>
+        <tr><td>Índice</td><td>JSON</td><td><a href="/api/"><code>/api/</code></a></td></tr>
+      </tbody>
+    </table>
+
+    <div class="nota">
+      <strong>Privacidad.</strong> La API <em>nunca</em> expone contacto ni coordenadas exactas (viven aparte, solo visibles para coordinadores verificados). La ubicación es a <strong>nivel de sector (~1&nbsp;km)</strong>, salvo sitios públicos como edificios dañados, donde <code>precision</code> es <code>"exacta"</code>. El texto usa un resumen saneado de datos personales cuando está disponible.
+    </div>
+
+    <h2>Campos — necesidad</h2>
+    <table>
+      <thead><tr><th>Campo</th><th>Descripción</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>Identificador estable del punto.</td></tr>
+        <tr><td><code>categoria</code></td><td><code>rescate</code>, <code>medico</code>, <code>agua</code>, <code>alimento</code>, <code>refugio</code>, <code>servicios</code>, <code>otro</code>.</td></tr>
+        <tr><td><code>urgencia</code></td><td><code>critica</code>, <code>alta</code>, <code>media</code>.</td></tr>
+        <tr><td><code>severidad</code> · <code>prioridad</code></td><td>Severidad del daño y prioridad derivada (0–100) por el sistema.</td></tr>
+        <tr><td><code>rescate_activo</code></td><td><code>true</code> si hay rescate activo reportado.</td></tr>
+        <tr><td><code>estado</code> · <code>verificacion</code></td><td>Estado operativo y nivel de verificación (confirmación ciudadana / coordinador).</td></tr>
+        <tr><td><code>precision</code></td><td><code>exacta</code> (sitio público) o <code>sector</code> (~1&nbsp;km, personas).</td></tr>
+        <tr><td><code>sector</code> · <code>descripcion</code></td><td>Referencia textual y resumen saneado de PII.</td></tr>
+        <tr><td><code>lat</code> · <code>lng</code> · <code>geohash</code></td><td>Ubicación pública (a nivel sector salvo <code>precision: "exacta"</code>).</td></tr>
+        <tr><td><code>fuentes</code></td><td>Sistemas de procedencia del dato.</td></tr>
+        <tr><td><code>creada_en</code> · <code>actualizada_en</code></td><td>Marcas de tiempo ISO-8601 (UTC).</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Ejemplo</h2>
+    <pre>fetch('https://focovenezuela.org/api/necesidades.json')
+  .then(r =&gt; r.json())
+  .then(d =&gt; {
+    console.log(d.total, 'necesidades');
+    for (const n of d.necesidades) {
+      console.log(n.categoria, n.urgencia, n.sector, n.lat, n.lng);
+    }
+  });</pre>
+
+    <h2>Notas de uso</h2>
+    <p>
+      Solo lectura (<code>GET</code>). Las respuestas se cachean ~5 minutos: no consultes con una
+      frecuencia mayor. Las necesidades duplicadas (depuradas por el curador) no se incluyen.
+    </p>
+
+    <div class="pills">
+      <a href="/">Volver al mapa</a>
+      <a href="https://github.com/leanaraque/foco-vzla" target="_blank" rel="noopener">Código abierto</a>
+    </div>
+
+    <footer>
+      FOCO Venezuela · La ayuda se organiza entre todos · datos abiertos con atribución.
+    </footer>
+  </div>
+</body>
+</html>
