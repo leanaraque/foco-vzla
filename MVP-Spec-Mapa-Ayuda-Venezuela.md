@@ -1253,3 +1253,13 @@ Desplegado (`functions:api` + `hosting`). **Consideración de privacidad (backlo
 - ✅ `zona.js` + 5 tests; suite unit completa **155/155**; build limpio. Detección confirmada contra producción (los 13 puntos vía la API §30).
 - ⏳ **Verificación en vivo del render** la hace el operador (la pestaña está detrás del login de coordinador).
 - **Limitación conocida (follow-up):** detección en cliente, sin flag persistente → un punto legítimamente de otra ciudad sigue listado hasta corregirlo. Si molesta, se persiste un `geo_revisada` o se automatiza la detección en el curador.
+
+---
+
+## 32. Limpieza estética: sin emojis + footer + frescura en la home (28 jun 2026)
+
+> Ajustes pedidos por el operador. Capa de presentación.
+
+- **Sin emojis en toda la web** (cumple la guarda de estilo): se quitaron de Recursos, Reportar, footer, NeedCard, LugarAutocomplete, indicador offline y cierres de KPI. Reemplazos limpios: estados de GPS por texto (`· ubicación lista` / `· no disponible`), cierres por `×` tipográfico, indicador offline por un punto CSS. Barrido final por rangos Unicode: 0 emojis en `src/public/index.html`.
+- **Footer mejorado:** banda sutil (`--gris-claro`) separada del contenido, links centrados con separadores "·" y una línea de marca debajo (`Foco Venezuela · La ayuda se organiza entre todos`). Se siente intencional, no flotando sobre los mapas.
+- **Frescura también en la home (`/`):** la home tenía el mismo problema que `/mapa` antes de §29 (cargaba cache-first una vez, sin revalidar). Ahora aplica el mismo *stale-while-revalidate* y **comparte la misma ventana `foco_mapa_sync`** que el mapa → el costo sigue acotado (§6.2-r1) y los datos se actualizan solos al entrar/volver a la pestaña, sin botón. Verificado: home carga sin errores, `foco_mapa_sync` activo.

@@ -3,10 +3,10 @@
   // "Storytelling with Data"). NO toca la capa de datos: solo CONSUME funciones de
   // lectura de db.js (read-only) y computa los agregados de la narrativa en cliente.
   // Mobile-first: el scroll vertical es la narrativa; cada sección es una "escena".
-  import { onMount, createEventDispatcher } from 'svelte';
+  import { onMount, onDestroy, createEventDispatcher } from 'svelte';
   import { t } from '../lib/i18n.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
-  import { leerNecesidadesPublicas, leerRecursosPublicos } from '../lib/db.js';
+  import { leerNecesidadesPublicas, leerRecursosPublicos, cacheVieja } from '../lib/db.js';
   import BrechaZona from '../components/BrechaZona.svelte';
   import Composicion from '../components/Composicion.svelte';
   import Fuentes from '../components/Fuentes.svelte';
@@ -29,15 +29,21 @@
 
   const fechaDe = (x) => (x?.creada_en?.toDate ? x.creada_en.toDate() : null);
 
-  onMount(async () => {
+  // Frescura igual que /mapa (§29): se pinta desde caché al instante y, si la caché
+  // superó la ventana de frescura, se revalida en segundo plano (sin botón). Comparte
+  // la misma marca `foco_mapa_sync` que el mapa → el costo sigue acotado (§6.2-r1).
+  let origenNec = '';
+  async function cargar(forzarServidor = false, background = false) {
+    if (!background) cargando = true;
     try {
       // recursos exige sesión (rules: read if isSignedIn); necesidades es público.
       try { await asegurarSesionAnonima(); } catch (_) { /* necesidades igual carga */ }
       const [resNec, recs] = await Promise.all([
-        leerNecesidadesPublicas({ max: 2000 }),
-        leerRecursosPublicos({ max: 2000 })
+        leerNecesidadesPublicas({ max: 2000, forzarServidor }),
+        leerRecursosPublicos({ max: 2000, forzarServidor })
       ]);
       const nec = resNec.items || [];
+      origenNec = resNec.origen;
       necesidades = nec;            // se pasan a las secciones de gráficos
       recursos = recs;
       totalNec = nec.length;
@@ -55,9 +61,24 @@
       // Sin backend accesible (p.ej. App Check en local): la home se muestra igual
       // con cifras en 0; no es un error que el usuario deba ver.
     } finally {
-      cargando = false;
+      if (!background) cargando = false;
     }
+  }
+
+  async function revalidarSiHaceFalta() {
+    if (origenNec === 'cache' && cacheVieja()) {
+      try { await cargar(true, true); } catch (_) { /* offline: se conserva lo mostrado */ }
+    }
+  }
+
+  let onVis;
+  onMount(async () => {
+    await cargar(false);            // pinta al instante (caché o, en frío, servidor)
+    await revalidarSiHaceFalta();   // y refresca solo si la caché ya es vieja (sin botón)
+    onVis = () => { if (document.visibilityState === 'visible') revalidarSiHaceFalta(); };
+    document.addEventListener('visibilitychange', onVis);
   });
+  onDestroy(() => { if (onVis) document.removeEventListener('visibilitychange', onVis); });
 
   // Tiempo relativo compacto para el sello ("hace 2 h").
   function relativo(d) {
@@ -166,7 +187,7 @@
           <h2>{kpi.t} <span class="kpi-n">{kpi.nec.length + kpi.rec.length}</span></h2>
           <p class="kpi-def">{kpi.def}</p>
         </div>
-        <button class="kpi-x" on:click={() => (kpi = null)} aria-label={$t('inicio.kpi_cerrar')}>✕</button>
+        <button class="kpi-x" on:click={() => (kpi = null)} aria-label={$t('inicio.kpi_cerrar')}>×</button>
       </div>
       {#if kpi.nec.length + kpi.rec.length === 0}
         <p class="kpi-vacio">{$t('inicio.kpi_vacio')}</p>

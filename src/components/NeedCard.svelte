@@ -31,7 +31,7 @@
     </span>
   </div>
 
-  <div class="sector">📍 {n.sector}</div>
+  <div class="sector">{n.sector}</div>
   <!-- Procesado §25: prefiere el resumen estandarizado/anclado (claro y sin PII); si
        aún no se procesó, cae al texto crudo de la fuente. -->
   {#if n.resumen || n.descripcion}<p class="desc">{n.resumen || n.descripcion}</p>{/if}

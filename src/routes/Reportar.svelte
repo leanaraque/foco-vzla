@@ -171,19 +171,18 @@
     <p class="ayuda">{$t('reportar.ubicacion_ayuda')}</p>
     <div style="margin-top:.5rem">
       <button type="button" class="btn-bloque" on:click={usarGps}>
-        📍 {$t('reportar.usar_gps')}
-        {#if gpsEstado === 'buscando'}…{:else if gpsEstado === 'ok'}✓{:else if gpsEstado === 'error'}⚠{/if}
+        {$t('reportar.usar_gps')}{#if gpsEstado === 'buscando'} …{:else if gpsEstado === 'ok'} · {$t('reportar.gps_ok')}{:else if gpsEstado === 'error'} · {$t('reportar.gps_error')}{/if}
       </button>
     </div>
     {#if mostrarMapa}
       <div class="mapa-titulo">{$t('reportar.mapa_titulo')}</div>
       <p class="ayuda">{$t('reportar.mapa_ayuda')}</p>
       <MapaUnificado conPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} necesidades={ctxNec} recursos={ctxRec} alto="300px" />
-      {#if pinLat != null}<p class="ayuda pin-ok">✓ {$t('reportar.mapa_marcado')}</p>{/if}
+      {#if pinLat != null}<p class="ayuda pin-ok">{$t('reportar.mapa_marcado')}</p>{/if}
       <button type="button" class="enlace-ocultar" on:click={() => (mostrarMapa = false)}>{$t('reportar.mapa_ocultar')}</button>
     {:else}
       <button type="button" class="btn-bloque" style="margin-top:.5rem" on:click={() => (mostrarMapa = true)}>
-        {$t('reportar.mapa_toggle')}{#if pinLat != null} ✓{/if}
+        {$t('reportar.mapa_toggle')}{#if pinLat != null} · {$t('reportar.marcado')}{/if}
       </button>
     {/if}
 

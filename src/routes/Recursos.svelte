@@ -100,7 +100,7 @@
       <LugarAutocomplete bind:valor={sector} bind:elegido={referencia} on:seleccion={onLugar} />
       <p class="ayuda">{$t('reportar.ubicacion_ayuda')}</p>
       <button type="button" class="btn-bloque" style="margin-top:.5rem" on:click={usarGps}>
-        📍 {$t('reportar.usar_gps')} {gpsEstado === 'ok' ? '✓' : gpsEstado === 'buscando' ? '…' : gpsEstado === 'error' ? '⚠' : ''}
+        {$t('reportar.usar_gps')}{#if gpsEstado === 'buscando'} …{:else if gpsEstado === 'ok'} · {$t('reportar.gps_ok')}{:else if gpsEstado === 'error'} · {$t('reportar.gps_error')}{/if}
       </button>
 
       <!-- Punto exacto en mapa — camino sugerido, igual que Reportar. -->
@@ -108,13 +108,13 @@
         <div class="mapa-titulo">{$t('reportar.mapa_titulo')}</div>
         <p class="ayuda">{$t('reportar.mapa_ayuda')}</p>
         <MapaUnificado conPin bind:lat={pinLat} bind:lng={pinLng} centro={centroMapa} necesidades={ctxNec} recursos={ctxRec} alto="300px" />
-        {#if pinLat != null}<p class="ayuda pin-ok">✓ {$t('reportar.mapa_marcado')}</p>{/if}
+        {#if pinLat != null}<p class="ayuda pin-ok">{$t('reportar.mapa_marcado')}</p>{/if}
         <button type="button" class="enlace-ocultar" on:click={() => (mostrarMapa = false)}>
           {$t('reportar.mapa_ocultar')}
         </button>
       {:else}
         <button type="button" class="btn-bloque" style="margin-top:.5rem" on:click={() => (mostrarMapa = true)}>
-          {$t('reportar.mapa_toggle')}{#if pinLat != null} ✓{/if}
+          {$t('reportar.mapa_toggle')}{#if pinLat != null} · {$t('reportar.marcado')}{/if}
         </button>
       {/if}
 
@@ -141,7 +141,7 @@
             <span class="tag">{$t('cat.' + r.categoria)}</span>
             {#if r.disponible}<span class="tag tag-resuelta">{$t('recursos.disponible')}</span>{/if}
           </div>
-          <div style="font-weight:600">📍 {r.sector}</div>
+          <div style="font-weight:600">{r.sector}</div>
           {#if r.descripcion}<p style="margin:.3rem 0">{r.descripcion}</p>{/if}
         </div>
       {/each}

@@ -160,8 +160,8 @@
   {#if elegido}
     <!-- CHIP claro y borrable: la persona VE qué eligió (evita confusión). -->
     <div class="chip-lugar" role="status">
-      <span>📍 {elegido.nombre} <span class="muni">· {elegido.municipio}</span></span>
-      <button type="button" class="x" on:click={quitar} aria-label={$t('reportar.quitar_lugar')}>✕</button>
+      <span>{elegido.nombre} <span class="muni">· {elegido.municipio}</span></span>
+      <button type="button" class="x" on:click={quitar} aria-label={$t('reportar.quitar_lugar')}>×</button>
     </div>
   {:else}
     <input
