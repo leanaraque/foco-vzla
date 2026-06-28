@@ -71,7 +71,7 @@
       const activo = n.rescate_activo === true;
       const color = activo ? '#e63946' : (colorUrg[n.urgencia] || '#1666a0');
       const m = L.marker([n.geo.lat, n.geo.lng], { icon: dotIcon(color, activo), _activo: activo, _grupo: 'nec' });
-      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc(n.descripcion || '')}${accionesHtml(n)}`);
+      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc(n.resumen || n.descripcion || '')}${accionesHtml(n)}`);
       if (n.id) markerPorId.set(n.id, m);
       mN.push(m);
       pts.push([n.geo.lat, n.geo.lng]);

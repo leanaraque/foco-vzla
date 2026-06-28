@@ -44,7 +44,7 @@
     (!fCat || n.categoria === fCat) &&
     (!fUrg || n.urgencia === fUrg) &&
     (!fEstado || (n.estado || 'sin_atender') === fEstado) &&
-    (q.length < 2 || qn(`${n.sector} ${n.descripcion} ${n.categoria} ${n.urgencia}`).includes(q))
+    (q.length < 2 || qn(`${n.sector} ${n.resumen || ''} ${n.descripcion} ${n.categoria} ${n.urgencia}`).includes(q))
   ));
   $: recFiltrados = (fTipo === 'nec' || fUrg || fEstado) ? [] : recursos.filter((r) =>
     (!fCat || r.categoria === fCat) &&
@@ -204,7 +204,7 @@
                 {#if n.confirmaciones}<span class="tag">{n.confirmaciones} {$t('mapa.confirmaciones')}</span>{/if}
               </div>
               <div class="sector-txt">{n.sector}</div>
-              {#if n.descripcion}<p class="desc">{n.descripcion}</p>{/if}
+              {#if n.resumen || n.descripcion}<p class="desc">{n.resumen || n.descripcion}</p>{/if}
             </button>
           {/each}
           {#each recFiltrados as r (r.id)}

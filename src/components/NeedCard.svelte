@@ -32,7 +32,9 @@
   </div>
 
   <div class="sector">📍 {n.sector}</div>
-  {#if n.descripcion}<p class="desc">{n.descripcion}</p>{/if}
+  <!-- Procesado §25: prefiere el resumen estandarizado/anclado (claro y sin PII); si
+       aún no se procesó, cae al texto crudo de la fuente. -->
+  {#if n.resumen || n.descripcion}<p class="desc">{n.resumen || n.descripcion}</p>{/if}
 
   {#if n.reclamada_por}
     <p class="ayuda">{$t('reclamada_por')}: <code>{n.reclamada_por.slice(0, 6)}</code></p>
