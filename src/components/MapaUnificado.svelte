@@ -70,7 +70,7 @@
       if (!n.geo?.lat) continue;
       const activo = n.rescate_activo === true;
       const color = activo ? '#e63946' : (colorUrg[n.urgencia] || '#1666a0');
-      const m = L.marker([n.geo.lat, n.geo.lng], { icon: dotIcon(color, activo), _activo: activo, _grupo: 'nec' });
+      const m = L.marker([n.geo.lat, n.geo.lng], { icon: dotIcon(color, activo), pane: 'necPane', _activo: activo, _grupo: 'nec' });
       m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc(n.resumen || n.descripcion || '')}${accionesHtml(n)}`);
       if (n.id) markerPorId.set(n.id, m);
       mN.push(m);
@@ -78,7 +78,7 @@
     }
     for (const r of recursos) {
       if (!r.geo?.lat) continue;
-      const m = L.marker([r.geo.lat, r.geo.lng], { icon: dotIcon(VERDE, false), _grupo: 'rec' });
+      const m = L.marker([r.geo.lat, r.geo.lng], { icon: dotIcon(VERDE, false), pane: 'recPane', _grupo: 'rec' });
       m.bindPopup(`<b>${$t('recursos.disponible')}: ${$t('cat.' + r.categoria) || r.categoria}</b><br>${esc(r.sector || '')}<br>${esc(r.descripcion || '')}`);
       if (r.id) markerPorId.set(r.id, m);
       mR.push(m);
@@ -108,13 +108,22 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '© OpenStreetMap'
     }).addTo(mapa);
+
+    // ORDEN DE CAPAS por z-index de pane (no por orden de inserción ni por la latitud
+    // de cada marcador, que es lo que hace Leaflet por defecto): las NECESIDADES (rojas,
+    // el dato crítico y mayoritario) SIEMPRE por encima de los RECURSOS (verdes, menos),
+    // que antes las tapaban al alejar. El PIN del reporte, por encima de todo.
+    mapa.createPane('recPane'); mapa.getPane('recPane').style.zIndex = 610;
+    mapa.createPane('necPane'); mapa.getPane('necPane').style.zIndex = 620;
+    mapa.createPane('pinPane'); mapa.getPane('pinPane').style.zIndex = 650;
+
     capaNec = L.markerClusterGroup({
       maxClusterRadius: 48, showCoverageOnHover: false, spiderfyOnMaxZoom: true, chunkedLoading: true,
-      iconCreateFunction: (c) => clusterIcon(c, 'nec')
+      clusterPane: 'necPane', iconCreateFunction: (c) => clusterIcon(c, 'nec')
     }).addTo(mapa);
     capaRec = L.markerClusterGroup({
       maxClusterRadius: 48, showCoverageOnHover: false, chunkedLoading: true,
-      iconCreateFunction: (c) => clusterIcon(c, 'rec')
+      clusterPane: 'recPane', iconCreateFunction: (c) => clusterIcon(c, 'rec')
     }).addTo(mapa);
 
     if (conPin) {
@@ -125,7 +134,7 @@
           '<circle cx="17" cy="16" r="6" fill="#fff"/></svg>',
         iconSize: [34, 44], iconAnchor: [17, 43]
       });
-      marcador = L.marker([ini.lat, ini.lng], { draggable: true, autoPan: true, icon: icono }).addTo(mapa);
+      marcador = L.marker([ini.lat, ini.lng], { draggable: true, autoPan: true, icon: icono, pane: 'pinPane' }).addTo(mapa);
       marcador.on('dragend', () => { const p = marcador.getLatLng(); colocar(p.lat, p.lng); });
       mapa.on('click', (e) => colocar(e.latlng.lat, e.latlng.lng));
       lat = Math.round(ini.lat * 1e6) / 1e6; lng = Math.round(ini.lng * 1e6) / 1e6;
