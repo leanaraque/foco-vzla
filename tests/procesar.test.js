@@ -1,0 +1,75 @@
+// Tests del motor de extracción determinístico (§25 typing) contra patrones REALES
+// observados en producción (TV_EDIF, IG_SENSEI, RESCATE_VE, TVAPP, ciudadanos).
+import { describe, it, expect } from 'vitest';
+import { extraer, extraerSeveridad, extraerNecesidades } from '../functions/lib/extraer.js';
+
+describe('extraer — severidad', () => {
+  it('"Daño parcial/total/severo" → severidad', () => {
+    expect(extraerSeveridad('Daño parcial. Fuente: x')).toBe('parcial');
+    expect(extraerSeveridad('Daño total. Fuente: x')).toBe('total');
+  });
+  it('colapso/derrumbe → total; sin derrumbe → parcial', () => {
+    expect(extraerSeveridad('Colapso confirmado.')).toBe('total');
+    expect(extraerSeveridad('El edificio se desplomó')).toBe('total');
+    expect(extraerSeveridad('Edificio sin derrumbe')).toBe('parcial');
+  });
+  it('sin señal → conserva la previa o desconocida', () => {
+    expect(extraerSeveridad('algo', 'severo')).toBe('severo');
+    expect(extraerSeveridad('algo')).toBe('desconocida');
+  });
+});
+
+describe('extraer — necesidades pedidas', () => {
+  it('"Necesita: ..." → vocabulario normalizado', () => {
+    expect(extraerNecesidades('Necesita: Búsqueda y rescate, Equipos especializados.')).toContain('rescate');
+    const n = extraerNecesidades('Necesita: agua, alimentos, ropa, higiene, refugio.');
+    expect(n).toEqual(expect.arrayContaining(['agua', 'alimento', 'refugio', 'insumos']));
+  });
+});
+
+describe('extraer — registro completo (patrones reales)', () => {
+  it('TV_EDIF templado: daño parcial, sin rescate activo', () => {
+    const r = extraer({ categoria: 'rescate', severidad: 'parcial', descripcion: 'Daño parcial. Fuente: terremotovenezuela.com', sector: 'Edificio San Jacinto · San Bernardino' });
+    expect(r.severidad).toBe('parcial');
+    expect(r.rescate_activo).toBe(false);
+  });
+
+  it('IG_SENSEI: señales de vida + atrapados → rescate activo + reportes', () => {
+    const r = extraer({ categoria: 'rescate', descripcion: 'Reportes ciudadanos (46): señales de vida · personas atrapadas. Fuente: IG_SENSEI.', sector: 'Belo Horizonte · playa grande' });
+    expect(r.senales.atrapados).toBe(true);
+    expect(r.senales.con_vida).toBe(true);
+    expect(r.rescate_activo).toBe(true);
+    expect(r.categoria).toBe('rescate');
+    expect(r.reportes_ciudadanos).toBe(46);
+  });
+
+  it('RESCATE_VE: colapso = severidad total, NO infla atrapados; necesita rescate', () => {
+    const r = extraer({ categoria: 'rescate', descripcion: 'Necesita: Búsqueda y rescate, Equipos especializados, Personal de emergencia. Colapso confirmado.', sector: 'Residencias Vista al Mar · Caraballeda' });
+    expect(r.severidad).toBe('total');
+    expect(r.rescate_activo).toBe(false);          // colapso ≠ personas atrapadas (conservador)
+    expect(r.necesidades).toContain('rescate');
+  });
+
+  it('RESCATE_VE agua: necesidad de insumos, categoría derivada NO rescate', () => {
+    const r = extraer({ categoria: 'agua', descripcion: 'Necesita: agua, alimentos, ropa, higiene, refugio. En Morón hay personas damnificadas.', sector: 'Palma Sola, Morón' });
+    expect(r.rescate_activo).toBe(false);
+    expect(r.categoria).toBe('agua');
+    expect(r.necesidades).toContain('agua');
+  });
+
+  it('TVAPP: fallecido + afectados; conservador (derrumbe de PARED ≠ daño total)', () => {
+    const r = extraer({ categoria: 'rescate', descripcion: 'La persona falleció a causa de un derrumbe de pared. Afectados: 1.', sector: 'Valle alto 1' });
+    expect(r.senales.fallecidos).toBe(true);
+    expect(r.severidad).toBe('desconocida');   // honesto: una pared no es el edificio entero
+    expect(r.afectados).toBe(1);
+    expect(r.rescate_activo).toBe(false);
+  });
+
+  it('Ciudadano caótico ("bajos escombros") → atrapados, sin filtrar el nombre', () => {
+    const r = extraer({ creador: 'uid', descripcion: 'Sahin Briceño 22 años bajos escombros de su edificio', sector: 'Catia La Mar' });
+    expect(r.senales.atrapados).toBe(true);
+    expect(r.rescate_activo).toBe(true);
+    // la extracción NO emite el nombre (solo campos tipados) → sin PII
+    expect(JSON.stringify(r)).not.toMatch(/Sahin|Brice/);
+  });
+});
