@@ -334,3 +334,7 @@ export { ingesta } from './ingesta.js';
 // === Procesador agendado (Plan §"procesar"): estandariza/tipa, mejora la geo con
 // info externa y resume (reglas + Claude), idempotente por hash. Vive en su módulo.
 export { procesador } from './procesador.js';
+
+// === API pública de datos abiertos (§30): endpoint HTTP de SOLO LECTURA para que
+// terceros extraigan los datos públicos (sin PII), cacheado en CDN. Vive en su módulo.
+export { api } from './api.js';

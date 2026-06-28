@@ -92,6 +92,25 @@ Detalle en [`functions/README.md`](functions/README.md). Las 6 funciones (2ª ge
 | `curador` | agendada (60 min) | Enriquece, recalcula prioridad con decaimiento, deduplica conservador (§25.8). |
 | `solicitarCoordinador` | callable | Postulación de coordinador → correo (Resend). |
 | `solicitarResolucion` | callable | "Resuelto" / "Corrección" de un punto del mapa → correo al coordinador (no toca datos). |
+| `api` | HTTP público | API de datos abiertos (solo lectura, sin PII), cacheada en CDN. Ver abajo. |
+
+## API pública de datos abiertos
+
+FOCO publica sus datos **públicos** (sin datos personales) para que medios, ONGs,
+otros mapas o investigadores los consuman. Solo lectura, CORS abierto, **cacheada
+~5 min** en el CDN (no es un servicio de emergencia; uso libre con atribución).
+
+| Endpoint | Devuelve |
+|---|---|
+| `https://focovenezuela.org/api/necesidades.json` | Necesidades públicas (JSON) |
+| `https://focovenezuela.org/api/necesidades.csv` | Necesidades públicas (CSV) |
+| `https://focovenezuela.org/api/recursos.json` | Recursos disponibles (JSON) |
+| `https://focovenezuela.org/api/recursos.csv` | Recursos disponibles (CSV) |
+| `https://focovenezuela.org/api/` | Índice de la API |
+
+**Nunca** expone contacto ni coordenadas exactas (viven en el subdoc privado, solo
+coordinador). La ubicación es a **nivel de sector (~1km)** salvo sitios públicos
+(`precision: "exacta"`). El texto usa el `resumen` saneado cuando existe.
 
 ## Ingesta de datos (operador)
 

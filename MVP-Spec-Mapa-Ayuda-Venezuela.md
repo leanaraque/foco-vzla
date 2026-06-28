@@ -1197,3 +1197,34 @@ El TTL acota las lecturas a **≤1 página por ventana y por usuario**, no por n
 | Consola | sin errores en todo el flujo | ✅ |
 
 Desplegado (`npm run deploy:hosting`) y confirmado en `focovenezuela.org` (la marca `foco_mapa_sync` se estampa con el bundle nuevo). **Nota de propagación (§22.11):** el service worker sirve el bundle viejo en la primera carga y activa el nuevo en la siguiente; como `index.html` es `no-cache`, se recoge rápido y desde entonces la frescura se mantiene sola → el fix es auto-propagante.
+
+---
+
+## 30. API pública de datos abiertos — endpoint para terceros (28 jun 2026)
+
+> Pregunta del operador: ¿hay un endpoint para que usuarios externos extraigan los datos? **No lo había.** Construido. Encaja con el posicionamiento "fuente de verdad / datos abiertos" (§24.3, §25).
+
+### 30.1 Estado previo (verificado)
+No existía vía programática de extracción: todas las Cloud Functions eran `onCall` con `enforceAppCheck: true` (solo navegador atestiguado); Firestore con App Check **ENFORCED** rechaza clientes no-navegador; el CSV del footer corre en el cliente. Sin `onRequest`/REST/JSON.
+
+### 30.2 Lo construido — `api` (`onRequest`, `functions/api.js`)
+Endpoint HTTP de **solo lectura** servido en `focovenezuela.org/api/**` (rewrite de Hosting → Cloud Run `api`):
+- `GET /api/necesidades.json` · `/api/necesidades.csv` · `/api/recursos.json` · `/api/recursos.csv` · `/api/` (índice).
+- **Solo proyección PÚBLICA** (misma que ya muestra la web): categoría, urgencia, severidad, prioridad, estado, verificación, `precision`, sector, geo a **nivel sector**, `fuentes[]` (sistemas). Se prefiere el `resumen` saneado sobre la `descripcion` cruda. **NUNCA** contacto ni `geo_exacta` (§6.2-r2 intacto: ni se leen). Oculta `duplicado_de`.
+
+### 30.3 Costo y seguridad
+- **Costo acotado (§6.2-r1):** `Cache-Control: s-maxage=300` → el CDN de Hosting cachea la respuesta; el origen (y Firestore) se toca a lo sumo ~1 vez cada 5 min por más consumidores que haya. Mismo principio que §29.
+- **Sin App Check** (es para clientes externos) y CORS `*`: la defensa es que es solo-lectura de datos ya públicos. `onRequest` queda público por defecto (a diferencia de los `onCall`, que requirieron binding manual, §22.11).
+
+### 30.4 Verificación en vivo
+| Prueba | Resultado |
+|---|---|
+| `/api/necesidades.json` directo y vía dominio | 200, 840 necesidades (943 − duplicados) |
+| `/api/recursos.json` | 200, 544 recursos |
+| Headers | `Access-Control-Allow-Origin: *`, `Cache-Control: …s-maxage=300` |
+| CDN | request 1 `X-Cache: MISS`, requests 2–3 `X-Cache: HIT` (origen no tocado) |
+| PII | sin contacto ni coords exactas; `descripcion` usa el `resumen` saneado |
+
+Desplegado (`functions:api` + `hosting`). **Consideración de privacidad (backlog §28.7):** el barrido único de PII sobre descripciones públicas legacy sigue recomendado — la API amplifica el alcance de cualquier PII que aún quede en una `descripcion` sin `resumen`.
+
+> **Pendiente acordado (siguiente pieza):** exactitud de coordenadas — surfacing de la cola `_procesar_revision` (conflictos de geo que el `procesador` ya detecta pero nadie revisa) en el Panel, + endurecer la geocodificación. Es el mayor arreglo real de precisión con menos esfuerzo.
