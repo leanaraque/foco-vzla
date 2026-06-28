@@ -1171,3 +1171,29 @@ Califican: **terremotovenezuela.com** (ya), **rescate-ve.vercel.app** (ALTA: `/a
 **Activo:** `firebase-schedule-ingesta-us-central1` ENABLED (cada 180 min) → frescura automática.
 
 **Pendiente del gate:** auditoría del jurado; verificación en vivo con chrome-devtools (estaba ocupado); decisión de **alcance** (rescate-ve trae acopio nacional); capturar anon key de las 2 fuentes Supabase. **Reversible:** los docs nuevos llevan `creador` por fuente (`RESCATE_VE`, etc.) → borrables; `fuentes[]` es aditivo.
+
+---
+
+## 29. Frescura de `/mapa` sin romper el costo — stale-while-revalidate (28 jun 2026)
+
+> Reporte del operador: usuarios veían **datos viejos** porque el botón "Actualizar" era la ÚNICA vía de refresco. Corregido sin sacrificar el control de costo (§6.2-r1) ni offline-first. Cambio **solo frontend**, desplegado y verificado en vivo. Commit `0adeb2d`.
+
+### 29.1 Causa
+La vista pública (§22.6) servía **caché-primero**: `leerNecesidadesPublicas` hacía `getDocsFromCache` y, si había caché, devolvía esos datos y **nunca** consultaba el servidor. `getDocsFromCache` es lectura puramente local → con la caché poblada, cada revisita mostraba datos viejos **indefinidamente** hasta pulsar "Actualizar". Diseño que priorizó el costo a costa de la frescura.
+
+### 29.2 Corrección — stale-while-revalidate con ventana de frescura (TTL)
+- `src/lib/db.js`: `TTL_FRESCURA_MS = 5 min`; marca de tiempo de la última lectura de servidor en localStorage (`foco_mapa_sync`, vía `marcarSync`) y helpers `msDesdeUltimaSync()` / `cacheVieja(ttl)`. La lógica caché-primero queda **intacta**.
+- `src/routes/Mapa.svelte`: pinta desde caché al instante (offline-first, 0 lecturas) y, **solo si la caché superó el TTL**, revalida en segundo plano contra el servidor (`revalidando`, sin spinner de bloqueo) y actualiza sin botón. Un listener de `visibilitychange` revalida también al **volver a la pestaña** (caso típico "entré y vi datos viejos"). El botón "Actualizar" se conserva como **override manual** instantáneo (cooldown 15s).
+
+### 29.3 Por qué NO rompe la virtud de costo (§6.2-r1)
+El TTL acota las lecturas a **≤1 página por ventana y por usuario**, no por navegación: un usuario que entra/sale 50 veces en 5 min sigue costando 1 sola página; el pico viral no se dispara. Para escala muy grande, el siguiente escalón sigue siendo *bundles* por CDN (§22.6, Fase 2b).
+
+### 29.4 Verificación en vivo (Chrome DevTools)
+| Escenario | Evidencia | Resultado |
+|---|---|---|
+| Revisita **dentro** del TTL | red: solo auth, **0 peticiones a Firestore**; aviso "datos guardados" | caché, costo intacto |
+| Revisita **tras** el TTL | red: lecturas de Firestore; `foco_mapa_sync` reseteado; aviso de caché desaparece | **refresco automático sin botón** |
+| Botón "Actualizar" | con caché fresca, fuerza servidor ignorando el TTL | override manual intacto |
+| Consola | sin errores en todo el flujo | ✅ |
+
+Desplegado (`npm run deploy:hosting`) y confirmado en `focovenezuela.org` (la marca `foco_mapa_sync` se estampa con el bundle nuevo). **Nota de propagación (§22.11):** el service worker sirve el bundle viejo en la primera carga y activa el nuevo en la siguiente; como `index.html` es `no-cache`, se recoge rápido y desde entonces la frescura se mantiene sola → el fix es auto-propagante.
