@@ -175,6 +175,7 @@
     <div class="kpi"><span class="n">{kSinAtender}</span><span class="l">{$t('pmapa.kpi_sin_atender')}</span></div>
     <div class="kpi k-verde"><span class="n">{kRecursos}</span><span class="l">{$t('pmapa.kpi_recursos')}</span></div>
   </div>
+  <p class="kpi-nota">{$t('pmapa.kpi_sin_atender_nota')}</p>
 
   <div class="filtros">
     <input class="buscar" name="buscar" type="search" bind:value={busca} placeholder={$t('mapa.buscar_ph')} aria-label={$t('mapa.buscar_ph')} />
@@ -297,7 +298,8 @@
   .cab h1 { font-size: 1.25rem; margin: 0; }
   .actualizar { white-space: nowrap; }
 
-  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 0.6rem 0; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin: 0.6rem 0 0.3rem; }
+  .kpi-nota { margin: 0 0 0.6rem; font-size: 0.74rem; color: var(--gris); line-height: 1.35; }
   .kpi { background: #fff; border: 1px solid var(--borde); border-radius: var(--radio); padding: 0.5rem 0.7rem; box-shadow: var(--sombra); }
   .kpi .n { display: block; font-size: 1.5rem; font-weight: 800; line-height: 1; }
   .kpi .l { font-size: 0.76rem; color: var(--gris); }

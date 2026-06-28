@@ -1264,3 +1264,16 @@ Desplegado (`functions:api` + `hosting`). **Consideración de privacidad (backlo
 - **Footer mejorado:** banda sutil (`--gris-claro`) separada del contenido, links centrados con separadores "·" y una línea de marca debajo (`Foco Venezuela · La ayuda se organiza entre todos`). Se siente intencional, no flotando sobre los mapas.
 - **Frescura también en la home (`/`):** la home tenía el mismo problema que `/mapa` antes de §29 (cargaba cache-first una vez, sin revalidar). Ahora aplica el mismo *stale-while-revalidate* y **comparte la misma ventana `foco_mapa_sync`** que el mapa → el costo sigue acotado (§6.2-r1) y los datos se actualizan solos al entrar/volver a la pestaña, sin botón. Verificado: home carga sin errores, `foco_mapa_sync` activo.
 - **Orden de capas del mapa (rojo sobre verde):** los marcadores/clústers de **recursos** (verdes, pocos) tapaban a los de **necesidades** (rojos, mayoría y el dato crítico) al alejar, porque Leaflet apila por orden de inserción y por latitud del marcador. Fix con **panes de z-index fijo** en `MapaUnificado`: `rec-pane` (610) < `nec-pane` (620) < `pin-pane` (650). Verificado en vivo: los rojos quedan solo en el pane 620 y los verdes en el 610 → las necesidades siempre por encima; el pin del reporte por encima de todo.
+
+---
+
+## 33. "Sin atender" → "Sin actualizar" — honestidad del estado (28 jun 2026)
+
+> El operador señaló que "Sin atender" induce a error: hay equipos (nacionales, internacionales, voluntarios) trabajando en terreno que **no usan la plataforma**, así que FOCO no puede saber qué punto está siendo atendido. El dato `sin_atender` solo significa *ningún coordinador en la plataforma ha marcado un cambio de estado* — no afirma nada del mundo real.
+
+**Decisión (solo texto mostrado; el valor `sin_atender` no se migra):** pasar de un lenguaje de "atendido/no atendido" a uno de **"sin novedad de estado en la plataforma"**.
+- Chip de estado y KPIs (`/mapa` y home): "Sin atender" → **"Sin actualizar"** / "Sin actualización de estado".
+- Subtítulo home: "nadie las ha tomado aún" → "sin novedad en la plataforma aún"; definición reescrita para aclararlo.
+- **Aviso bajo los KPIs de `/mapa`:** *«Sin actualizar» = sin novedad de estado en la plataforma, no que nadie ayude: hay equipos en el sitio que no la usan.*
+
+Verificado en vivo (mapa + home + chip de tarjeta): sin "Sin atender" residual; aviso visible.
