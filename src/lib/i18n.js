@@ -256,6 +256,27 @@ const diccionarios = {
     'panel.por_revisar_total': 'Mostrando {n} casos por revisar.',
     'panel.por_revisar_capado': 'se alcanzó el máximo de la vista — filtra por categoría/urgencia para ver el resto.',
 
+    // Revisión de ubicación dudosa (puntos fuera de la zona del sismo, §zona)
+    'panel.ubicacion': 'Ubicación',
+    'panel.ubic_titulo': 'Puntos con ubicación dudosa',
+    'panel.ubic_intro': 'Reportes cuyas coordenadas caen FUERA de la zona del sismo (costa centro-norte). Suelen ser errores de geocodificación: un nombre que coincidió con otro lugar del país. Revisa y corrige el pin; algunos pueden ser reportes legítimos de otra ciudad.',
+    'panel.ubic_total': 'Mostrando {n} puntos fuera de la zona.',
+    'panel.ubic_vacio': 'No hay puntos fuera de la zona afectada. Bien.',
+    'panel.ubic_recargar': 'Recargar',
+    'ubic.fuera': 'Fuera de la zona del sismo',
+    'ubic.prec_exacta': 'Ubicación exacta',
+    'ubic.prec_sector': 'Nivel sector (~1 km)',
+    'ubic.coord_actual': 'Coordenada actual',
+    'ubic.corregir': 'Corregir ubicación',
+    'ubic.centrar': 'Centrar en zona afectada',
+    'ubic.nota': 'Arrastra el pin (o toca el mapa) al lugar correcto. Para edificios la ubicación pública es exacta; para personas se guarda a nivel sector y la exacta queda privada.',
+    'ubic.aplicar': 'Guardar ubicación',
+    'ubic.aplicando': 'Guardando…',
+    'ubic.cancelar': 'Cancelar',
+    'ubic.corregido': 'Ubicación corregida.',
+    'ubic.error': 'No se pudo guardar. Intenta de nuevo.',
+    'ubic.ver_mapa': 'Ver en el mapa',
+
     // Gestión de solicitudes de la comunidad (Resuelto / Corrección) en el panel
     'sol.titulo': 'Solicitudes de la comunidad',
     'sol.intro': 'Avisos de personas sobre puntos del mapa: que ya recibieron ayuda, o correcciones. Revísalos y ciérralos.',

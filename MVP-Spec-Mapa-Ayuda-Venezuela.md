@@ -1231,3 +1231,25 @@ Para que la API sea encontrable sin ser intrusiva: una **página estática** `pu
 Desplegado (`functions:api` + `hosting`). **Consideración de privacidad (backlog §28.7):** el barrido único de PII sobre descripciones públicas legacy sigue recomendado — la API amplifica el alcance de cualquier PII que aún quede en una `descripcion` sin `resumen`.
 
 > **Pendiente acordado (siguiente pieza):** exactitud de coordenadas — surfacing de la cola `_procesar_revision` (conflictos de geo que el `procesador` ya detecta pero nadie revisa) en el Panel, + endurecer la geocodificación. Es el mayor arreglo real de precisión con menos esfuerzo.
+
+---
+
+## 31. Exactitud de coordenadas — revisión de ubicación en el Panel (28 jun 2026)
+
+> Objetivo del operador: que los puntos del mapa estén lo más exactos posibles, dada la incertidumbre de las herramientas de geocodificación. Construido tras una **auditoría con evidencia** del estado real.
+
+### 31.1 Auditoría (qué encontramos, no supusimos)
+- **`_procesar_revision` está VACÍA** (el `procesador` casi no marca conflictos): surfacing esa cola hoy = pestaña vacía. Descartado como primer paso.
+- La geocodificación **no está rota en masa**: 835 coords distintas de 840 puntos, **0 apilamientos en centroides**, 0 sin coords.
+- **Reverse-geocode de muestra:** la mayoría cae bien (Los Corales→Caraballeda, La Trinidad→Baruta, Carayaca→Carayaca), **pero hay errores reales**: `"El Limón"`→Margarita, `"Puente de Morón"`→costa oriental (~500 km). El `limit=1` de Nominatim empareja nombres ambiguos con otro lugar del país.
+- **Cuantificado:** **13 de 840 puntos (~1,5%) caen FUERA de la zona del sismo** (costa centro-norte). Ese es el síntoma detectable y accionable.
+
+### 31.2 Lo construido — pestaña "Ubicación" en el Panel
+- **Detección** (`src/lib/zona.js`, módulo PURO + tests): bounding box generoso de la zona afectada (`ZONA_AFECTADA`); `fueraDeZona(geo)` marca los puntos con coords fuera. 5 unit tests (incluye los errores reales y que Maracay/Valencia tierra adentro NO son falsos positivos).
+- **Surfacing** (`Panel.svelte`, pestaña "Ubicación", badge ámbar): carga TODAS las necesidades **una vez, cache-first** (costo acotado §29) y lista las fuera de zona.
+- **Corrección** (`UbicacionCard.svelte`): editor con **pin arrastrable** (reusa `MapaUnificado conPin`) + botón "Centrar en zona afectada" para mover un punto que cayó lejísimos. Guarda vía `aplicarEdicionNecesidad`→`editarNecesidad` (Admin SDK + rol, ya probado en prod). **Respeta la precisión:** edificio (`exacta`) → pública exacta; persona (`sector`) → pública a ~1 km + exacta solo al privado (§9-1). El doc queda `editado_por_operador` → la ingesta no lo vuelve a pisar.
+
+### 31.3 Estado
+- ✅ `zona.js` + 5 tests; suite unit completa **155/155**; build limpio. Detección confirmada contra producción (los 13 puntos vía la API §30).
+- ⏳ **Verificación en vivo del render** la hace el operador (la pestaña está detrás del login de coordinador).
+- **Limitación conocida (follow-up):** detección en cliente, sin flag persistente → un punto legítimamente de otra ciudad sigue listado hasta corregirlo. Si molesta, se persiste un `geo_revisada` o se automatiza la detección en el curador.

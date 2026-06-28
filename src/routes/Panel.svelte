@@ -2,9 +2,11 @@
   import { onDestroy } from 'svelte';
   import { t } from '../lib/i18n.js';
   import { user, esCoordinador, authListo, entrarCoordinador, salir } from '../lib/stores.js';
-  import { suscribirNecesidades, suscribirSolicitudes, suscribirPorRevisar, contarPorRevisar } from '../lib/db.js';
+  import { suscribirNecesidades, suscribirSolicitudes, suscribirPorRevisar, contarPorRevisar, leerNecesidadesPublicas } from '../lib/db.js';
+  import { fueraDeZona } from '../lib/zona.js';
   import NeedCard from '../components/NeedCard.svelte';
   import SolicitudCard from '../components/SolicitudCard.svelte';
+  import UbicacionCard from '../components/UbicacionCard.svelte';
   import MapaUnificado from '../components/MapaUnificado.svelte';
   import CoordinatorForm from '../components/CoordinatorForm.svelte';
 
@@ -61,6 +63,26 @@
   // lista y con los "Caso prioritario" del mapa); cerrada, el de agregación (heads-up).
   $: revBadgeNum = porRevisar.length || porRevisarTotal || 0;
 
+  // --- ubicación dudosa (puntos fuera de la zona del sismo, §zona) ---
+  // Carga TODAS las necesidades una vez (cache-first, costo acotado igual que /mapa,
+  // §29) y filtra en cliente las que caen fuera de la zona afectada (mala geocodif.).
+  let todasNec = [];
+  let ubicCargando = false, ubicArrancado = false;
+  $: ubicFuera = todasNec.filter((x) => fueraDeZona(x.geo));
+  async function cargarUbicacion(forzarServidor = false) {
+    ubicCargando = true;
+    try {
+      const r = await leerNecesidadesPublicas({ forzarServidor });
+      todasNec = r.items;
+    } catch (_) { /* mantiene lo que haya */ }
+    finally { ubicCargando = false; }
+  }
+  // Al corregir un punto, deja de estar fuera de zona → lo quitamos de la lista local.
+  function onCorregido(e) {
+    const id = e.detail?.id;
+    if (id) todasNec = todasNec.filter((x) => x.id !== id);
+  }
+
   // --- solicitudes de la comunidad (Resuelto / Corrección) ---
   let solicitudes = [];
   let unsubSol = null;
@@ -107,6 +129,11 @@
   // sola vez por sesión de coordinador; al cerrar sesión se limpia y se rearma.
   $: if ($esCoordinador && !solArrancado) { solArrancado = true; solIntentos = 0; subSolicitudes(); }
   $: if (!$esCoordinador && solArrancado) { if (unsubSol) { unsubSol(); unsubSol = null; } solArrancado = false; solicitudes = []; }
+
+  // Carga las necesidades para el chequeo de ubicación una sola vez por sesión de
+  // coordinador (cache-first → barato; alimenta el badge sin abrir la pestaña).
+  $: if ($esCoordinador && !demo && !ubicArrancado) { ubicArrancado = true; cargarUbicacion(); }
+  $: if (!$esCoordinador && ubicArrancado) { ubicArrancado = false; todasNec = []; }
 
   // Badge: conteo REAL (1 lectura de agregación), siempre que sea coordinador y al
   // cambiar los filtros. Barato → no depende de abrir la pestaña.
@@ -181,6 +208,12 @@
         {$t('panel.solicitudes')}
         {#if solPendientes.length}<span class="badge-num">{solPendientes.length}</span>{/if}
       </button>
+      {#if !demo}
+        <button class:activo={vista === 'ubicacion'} on:click={() => (vista = 'ubicacion')}>
+          {$t('panel.ubicacion')}
+          {#if ubicFuera.length}<span class="badge-num amber">{ubicFuera.length}</span>{/if}
+        </button>
+      {/if}
     </div>
 
     {#if vista === 'revisar'}
@@ -215,6 +248,23 @@
         {/each}
       {/if}
 
+    {:else if vista === 'ubicacion'}
+      <h2 class="sub">{$t('panel.ubic_titulo')}</h2>
+      <p class="intro-seg">{$t('panel.ubic_intro')}</p>
+      <p class="ayuda">
+        {$t('panel.ubic_total').replace('{n}', ubicFuera.length)}
+        · <button class="link-inline" on:click={() => cargarUbicacion(true)} disabled={ubicCargando}>{$t('panel.ubic_recargar')}</button>
+      </p>
+      {#if ubicCargando && todasNec.length === 0}
+        <p class="ayuda">…</p>
+      {:else if ubicFuera.length === 0}
+        <p class="ayuda">{$t('panel.ubic_vacio')}</p>
+      {:else}
+        {#each ubicFuera as n (n.id)}
+          <UbicacionCard {n} on:corregido={onCorregido} />
+        {/each}
+      {/if}
+
     {:else if vista === 'mapa'}
       {#if items.length}
         <MapaUnificado necesidades={items} />
@@ -246,5 +296,7 @@
   .badge-num { background: #e63946; color: #fff; font-size: 0.72rem; font-weight: 800;
     min-width: 1.1rem; height: 1.1rem; padding: 0 0.25rem; border-radius: 999px;
     display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+  .badge-num.amber { background: #d97706; }
+  .link-inline { background: none; border: none; color: var(--azul); font-weight: 600; padding: 0; min-height: 0; font-size: inherit; cursor: pointer; }
   .sub { margin: 0.4rem 0 0.2rem; }
 </style>
