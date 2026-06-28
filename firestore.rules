@@ -298,6 +298,12 @@ service cloud.firestore {
     match /_ingesta_fuentes/{id}  { allow read: if isCoord(); allow write: if false; }
     match /_revision_ingesta/{id} { allow read: if isCoord(); allow write: if false; }
 
+    // === PROCESADOR (Plan §"procesar") ====================================
+    // Cola de revisión del operador para decisiones de geo dudosas (conflicto de
+    // ubicación). Escritura SOLO por la Cloud Function `procesador` (Admin SDK);
+    // lectura SOLO coordinador. El resumen/tipado se escriben en `necesidades`.
+    match /_procesar_revision/{id} { allow read: if isCoord(); allow write: if false; }
+
     // === Cierre por defecto: todo lo no declarado, denegado ================
     match /{document=**} {
       allow read, write: if false;

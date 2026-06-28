@@ -18,6 +18,7 @@ export function resumenDeterminista(campos = {}, sector = '') {
   const s = campos.senales || {};
   const sen = [];
   if (s.atrapados) sen.push('personas atrapadas');
+  else if (s.por_rescatar) sen.push('personas por rescatar');
   if (s.con_vida) sen.push('con señales de vida');
   if (s.sin_ayuda) sen.push('sin ayuda aún');
   if (s.maquinaria) sen.push('requiere maquinaria');
@@ -42,8 +43,17 @@ const SYSTEM_RESUMEN = [
   '2. NUNCA incluyas datos personales: nombres de personas, cédulas, teléfonos. Refiérete a lugares y situaciones, no a personas por su nombre.',
   '3. Español neutro, 1 frase, máximo ~30 palabras. Directo: qué se necesita, gravedad, señales clave (atrapados/con vida/sin ayuda), referencia del lugar.',
   '4. Si la información es insuficiente, dilo brevemente (ej. "Edificio reportado como afectado; faltan detalles").',
-  '5. Devuelve SOLO el resumen, sin preámbulos, sin comillas, sin "Resumen:".'
+  '5. Devuelve SOLO el resumen, sin preámbulos, sin comillas, sin "Resumen:".',
+  '6. NUNCA afirmes ni insinúes que hay personas muertas, fallecidas o "sin vida" salvo que el texto lo diga EXPLÍCITAMENTE. La ausencia de "señales de vida" NO significa que estén sin vida: ante la duda, no menciones el estado vital. Esto puede costar una vida.'
 ].join('\n');
+
+// Guarda de SEGURIDAD (rescate): el resumen NO puede afirmar/insinuar muerte o ausencia
+// de vida a menos que el campo TIPADO `senales.fallecidos` lo confirme. Evita que la IA
+// infiera "sin vida" desde la mera ausencia de señales — un error que despriorizaría a
+// alguien que sigue vivo. (Palabras positivas como "con vida"/"señales de vida" no caen.)
+const RE_MUERTE = /\bsin vida\b|sin signos?(?:\s+de)?\s+vida|sin signos vitales|sin sobrevivientes|fallec|muert|cad[aá]ver|deceso|occis/i;
+export const afirmaMuerteNoFundada = (texto, campos = {}) =>
+  RE_MUERTE.test(String(texto || '')) && !(campos.senales && campos.senales.fallecidos);
 
 // Arma la entrada para la IA (PURO): campos tipados + texto saneado de PII.
 export function construirEntradaIA(record = {}, campos = {}) {
@@ -80,8 +90,9 @@ export async function resumenIA(record, campos, { apiKey, fetchImpl = fetch, mod
     const j = await r.json();
     let texto = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
     texto = texto.replace(/^["“']|["”']$/g, '').replace(/^resumen:\s*/i, '').trim();
-    // Guarda final: si quedó PII o vacío/larguísimo, usa el determinista.
-    if (!texto || texto.length > 280 || scrubPII(texto).tienePII) {
+    // Guarda final: si quedó PII, vacío/larguísimo, o AFIRMA MUERTE no fundada → descarta
+    // y usa el determinista (seguro, anclado a los campos tipados).
+    if (!texto || texto.length > 280 || scrubPII(texto).tienePII || afirmaMuerteNoFundada(texto, campos)) {
       return { resumen: base, via: 'reglas', ok: false };
     }
     return { resumen: texto, via: 'ia', ok: true };

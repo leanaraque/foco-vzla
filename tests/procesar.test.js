@@ -2,8 +2,9 @@
 // observados en producción (TV_EDIF, IG_SENSEI, RESCATE_VE, TVAPP, ciudadanos).
 import { describe, it, expect } from 'vitest';
 import { extraer, extraerSeveridad, extraerNecesidades } from '../functions/lib/extraer.js';
-import { resumenDeterminista, construirEntradaIA, resumenIA } from '../functions/lib/resumen.js';
+import { resumenDeterminista, construirEntradaIA, resumenIA, afirmaMuerteNoFundada } from '../functions/lib/resumen.js';
 import { extraerDireccion, consultasGeo, triangular } from '../functions/lib/geoenrich.js';
+import { hashContenido, necesitaProceso, procesarUno } from '../functions/lib/procesar.js';
 
 describe('extraer — severidad', () => {
   it('"Daño parcial/total/severo" → severidad', () => {
@@ -65,6 +66,25 @@ describe('extraer — registro completo (patrones reales)', () => {
     expect(r.severidad).toBe('desconocida');   // honesto: una pared no es el edificio entero
     expect(r.afectados).toBe(1);
     expect(r.rescate_activo).toBe(false);
+  });
+
+  it('"9 personas por rescatar" → rescate activo (≠ la NECESIDAD "Búsqueda y rescate")', () => {
+    const r = extraer({ categoria: 'rescate', descripcion: 'Necesita: Búsqueda y rescate, Equipos especializados. 9 personas por rescatar (reporte 01:23).', sector: 'Edificio San Judas Tadeo · Caracas' });
+    expect(r.senales.por_rescatar).toBe(true);
+    expect(r.rescate_activo).toBe(true);
+    expect(r.necesidades).toContain('rescate');
+  });
+
+  it('pedir "Búsqueda y rescate" SIN gente confirmada NO activa rescate', () => {
+    const r = extraer({ categoria: 'rescate', descripcion: 'Necesita: Búsqueda y rescate, Equipos especializados. Colapso confirmado.', sector: 'Edif X · Caracas' });
+    expect(r.senales.por_rescatar).toBe(false);
+    expect(r.rescate_activo).toBe(false);
+  });
+
+  it('"Los escuchan entre los escombros" → atrapados/rescate (no solo "bajo escombros")', () => {
+    const r = extraer({ descripcion: 'Los escuchan entre los escombros. Necesitan ayuda.', sector: 'Residencia Bahías del Mar' });
+    expect(r.senales.atrapados).toBe(true);
+    expect(r.rescate_activo).toBe(true);
   });
 
   it('Ciudadano caótico ("bajos escombros") → atrapados, sin filtrar el nombre', () => {
@@ -129,6 +149,23 @@ describe('resumen — IA anclada (fetch mockeado) + guardas', () => {
     const { via } = await resumenIA(rec, campos, { apiKey: 'k', fetchImpl });
     expect(via).toBe('reglas');
   });
+
+  it('guarda anti-muerte: detecta afirmación de muerte NO fundada en los campos', () => {
+    const vivos = extraer({ descripcion: 'Ciudadanos (9): personas atrapadas · sin ayuda aún' });
+    expect(afirmaMuerteNoFundada('9 personas atrapadas sin vida aparente, sin ayuda.', vivos)).toBe(true);
+    expect(afirmaMuerteNoFundada('9 personas atrapadas con señales de vida.', vivos)).toBe(false); // "de vida" positivo no cae
+    const conFallecido = extraer({ descripcion: 'La persona falleció.' });
+    expect(afirmaMuerteNoFundada('Se reporta un fallecido.', conFallecido)).toBe(false); // fundado en el campo
+  });
+
+  it('IA inventa "sin vida" sin respaldo → descarta y usa el determinístico (seguridad)', async () => {
+    const recVivo = { sector: 'Edificio Costa Brava · Caraballeda', descripcion: 'Ciudadanos (9): personas atrapadas · sin ayuda aún' };
+    const camposVivo = extraer(recVivo);
+    const fetchImpl = async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Costa Brava: 9 personas atrapadas sin vida aparente, sin ayuda.' }] }) });
+    const { via, resumen } = await resumenIA(recVivo, camposVivo, { apiKey: 'k', fetchImpl });
+    expect(via).toBe('reglas');                       // rechazó la alucinación
+    expect(resumen).not.toMatch(/sin vida/i);
+  });
 });
 
 describe('geo-enricher — exactitud con info externa', () => {
@@ -158,12 +195,20 @@ describe('geo-enricher — exactitud con info externa', () => {
     expect(r.geo.lat).toBeCloseTo(10.6120, 3);
   });
 
-  it('triangular: actual EXACTA vs externo lejano → conflicto, conserva y marca revisión', () => {
-    const r = triangular({ geoActual: { lat: 10.6100, lng: -67.0100 }, precisionActual: 'exacta', candidatos: [{ lat: 10.7000, lng: -67.1000 }] });
+  it('triangular: actual EXACTA vs VARIOS externos lejanos concordantes → conflicto, conserva', () => {
+    const r = triangular({ geoActual: { lat: 10.6100, lng: -67.0100 }, precisionActual: 'exacta', candidatos: [{ lat: 10.7000, lng: -67.1000 }, { lat: 10.7005, lng: -67.1002 }] });
     expect(r.confianza).toBe('media');
     expect(r.revisar).toBe(true);
     expect(r.fuente_geo).toBe('conflicto');
     expect(r.geo.lat).toBe(10.6100); // conserva la exacta
+  });
+
+  it('triangular: UN solo hit lejano (centroide de ciudad) → NO mueve ni marca revisión', () => {
+    // Caso real: "Hotel Eduard" no existe en OSM; solo responde "Maiquetía" (centroide, ~8km).
+    const r = triangular({ geoActual: { lat: 10.6000, lng: -67.0400 }, precisionActual: 'sector', candidatos: [{ lat: 10.5966, lng: -66.9597 }] });
+    expect(r.revisar).toBe(false);                 // no inunda la cola del operador
+    expect(r.fuente_geo).toBe('sin_mejora_externa');
+    expect(r.geo.lat).toBe(10.6000);               // conserva la coord actual
   });
 
   it('triangular: sin coord previa + 2 externos concordantes → coord nueva, alta', () => {
@@ -178,5 +223,52 @@ describe('geo-enricher — exactitud con info externa', () => {
     expect(r.confianza).toBe('baja');
     expect(r.revisar).toBe(true);
     expect(r.geo).toBe(null);
+  });
+});
+
+describe('procesar — orquestación (procesarUno)', () => {
+  const fetchOk = async () => ({ ok: true, json: async () => ({ content: [{ type: 'text', text: 'Resumen claro del punto.' }] }) });
+
+  it('hash estable, cambia con el contenido, y necesitaProceso', () => {
+    const rec = { descripcion: 'Daño total', sector: 'X', geo: { lat: 10.6, lng: -67 } };
+    const h = hashContenido(rec);
+    expect(hashContenido(rec)).toBe(h);                                  // estable
+    expect(hashContenido({ ...rec, descripcion: 'Daño parcial' })).not.toBe(h); // cambia
+    expect(necesitaProceso(rec)).toBe(true);                            // sin procesar
+    expect(necesitaProceso({ ...rec, procesado: { hash: h } })).toBe(false); // ya procesado
+  });
+
+  it('coord exacta de fuente: NO re-geocodifica, resume y tipa', async () => {
+    let geocodes = 0;
+    const rec = { precision: 'exacta', geo: { lat: 10.61, lng: -67.01, geohash: 'd3ze8jdkej' }, sector: 'Belo Horizonte', descripcion: 'Daño total. personas atrapadas con señales de vida.' };
+    const { patch, revision } = await procesarUno(rec, { apiKey: 'k', fetchImpl: fetchOk, geocodeImpl: async () => { geocodes++; return null; } });
+    expect(geocodes).toBe(0);                          // confía la coord de fuente
+    expect(patch.procesado.geo_fuente).toBe('fuente_exacta');
+    expect(patch.resumen).toBeTruthy();
+    expect(patch.severidad).toBe('total');
+    expect(patch.rescate_activo).toBe(true);
+    expect(patch.geo).toBeUndefined();                 // no mueve la exacta
+    expect(revision).toBe(null);
+  });
+
+  it('registro aproximado (sector): geocodifica y mejora la coord cercana', async () => {
+    const rec = { precision: 'sector', geo: { lat: 10.6100, lng: -67.0200, geohash: 'd3ze8' }, sector: 'Sector X · Morón', descripcion: 'Necesita agua y alimentos' };
+    const { patch } = await procesarUno(rec, { apiKey: 'k', fetchImpl: fetchOk, geocodeImpl: async () => ({ lat: 10.6120, lng: -67.0180 }) });
+    expect(patch.geo).toBeDefined();
+    expect(patch.procesado.geo_fuente).toBe('osm_mejora');
+    expect(patch.necesidades_pedidas).toEqual(expect.arrayContaining(['agua']));
+  });
+
+  it('respeta edición manual del operador (no mueve geo aunque OSM mejore)', async () => {
+    const rec = { precision: 'sector', editado_por_operador: true, geo: { lat: 10.6100, lng: -67.0200 }, sector: 'X · Morón', descripcion: 'agua' };
+    const { patch } = await procesarUno(rec, { apiKey: 'k', fetchImpl: fetchOk, geocodeImpl: async () => ({ lat: 10.6120, lng: -67.0180 }) });
+    expect(patch.geo).toBeUndefined();
+  });
+
+  it('IA falla → resumen por reglas, nunca lanza, patch íntegro', async () => {
+    const rec = { precision: 'exacta', geo: { lat: 10.61, lng: -67.01 }, sector: 'Edif Y · La Guaira', descripcion: 'Daño parcial' };
+    const { patch } = await procesarUno(rec, { apiKey: 'k', fetchImpl: async () => ({ ok: false, json: async () => ({}) }), geocodeImpl: async () => null });
+    expect(patch.procesado.resumen_via).toBe('reglas');
+    expect(patch.resumen).toBeTruthy();
   });
 });

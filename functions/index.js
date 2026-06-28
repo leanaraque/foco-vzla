@@ -330,3 +330,7 @@ export { curador } from './curador.js';
 // === Ingesta agendada (Plan): jala las fuentes externas a staging (upsert
 // idempotente) y promueve a `necesidades`/`recursos` sin duplicar. Vive en su módulo.
 export { ingesta } from './ingesta.js';
+
+// === Procesador agendado (Plan §"procesar"): estandariza/tipa, mejora la geo con
+// info externa y resume (reglas + Claude), idempotente por hash. Vive en su módulo.
+export { procesador } from './procesador.js';

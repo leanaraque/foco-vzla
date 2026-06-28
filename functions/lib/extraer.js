@@ -16,7 +16,10 @@ const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCa
 // SOLO personas atrapadas explícitas. El colapso/derrumbe estructural va a SEVERIDAD
 // (extraerSeveridad), no a "atrapados": un edificio caído no implica gente atrapada
 // salvo que el texto lo diga. Conservador para no inflar rescate_activo (fuente de verdad).
-const reAtrap = /atrapad|tapiad|sepultad|enterrad|bajo[s]?\s+(los\s+)?escombros|(gente|personas?|familia|hij[oa]s?)\s+(dentro|adentro|atrapad|bajo)/;
+const reAtrap = /atrapad|tapiad|sepultad|enterrad|(?:bajo|entre)s?\s+(?:los\s+)?escombros|(gente|personas?|familia|hij[oa]s?)\s+(dentro|adentro|atrapad|bajo)/;
+// "9 personas por rescatar" / "rescatar a 9" → personas esperando rescate (≠ la NECESIDAD
+// "Búsqueda y rescate", que es un pedido de servicio). Exige sujeto/conteo + el verbo.
+const rePorRescatar = /(?:personas?|gente|familias?|\d+)\s+(?:por|a|que|para)\s+rescatar|rescatar\s+a\s+\d+/;
 const reVida = /con vida|senales de vida|vivo|viva|vivos|vivas|gritan|gritos|responden|piden ayuda|se escuchan|escuchan voces|toques/;
 const reSinAyuda = /sin ayuda|no (ha|han) llegado|nadie ha|no hay (nadie|ayuda|rescatistas)|aun no (han|ha) (ido|llegado)/;
 const reMaq = /maquinaria|excavadora|cavadora|gatos hidraulic|herramientas|palas|grua/;
@@ -58,6 +61,7 @@ export function extraer(rec = {}) {
   const senales = {
     atrapados: reAtrap.test(t),
     con_vida: reVida.test(t),
+    por_rescatar: rePorRescatar.test(t),
     sin_ayuda: reSinAyuda.test(t),
     maquinaria: reMaq.test(t),
     fallecidos: reFallecido.test(t)
@@ -67,10 +71,10 @@ export function extraer(rec = {}) {
   const afectados = num(/afectad[oa]s?:?\s*(\d+)/i, texto) ?? num(/(\d+)\s+afectad/i, texto);
   const reportes = num(/(?:reportes?\s+)?ciudadanos?\s*\((\d+)\)/i, rec.descripcion) ?? num(/\((\d+)\)\s*:/i, rec.descripcion);
 
-  const rescate = (senales.atrapados || senales.con_vida)
-    ? { atrapados: senales.atrapados, con_vida: senales.con_vida }
+  const rescate = (senales.atrapados || senales.con_vida || senales.por_rescatar)
+    ? { atrapados: senales.atrapados, con_vida: senales.con_vida, por_rescatar: senales.por_rescatar }
     : null;
-  const rescate_activo = !!(senales.atrapados || senales.con_vida);
+  const rescate_activo = !!(senales.atrapados || senales.con_vida || senales.por_rescatar);
 
   // Categoría derivada: si pide insumos sin señal de rescate, NO es rescate (corrige
   // el ruido tipo "Edificio sin derrumbe" → alimento). Rescate manda si hay señal viva.

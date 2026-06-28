@@ -50,7 +50,10 @@ export function triangular({ geoActual = null, precisionActual = 'sector', candi
   if (cands.length) {
     cluster = cands.filter((c) => distM(cands[0], c) <= 200);
   }
-  const acuerdoExterno = cluster.length >= 2 || (cands.length === 1);
+  // EVIDENCIA FUERTE = varios geocodificados concuerdan ENTRE SÍ (cluster ≥2). Un único
+  // hit suele ser un centroide de ciudad ("Caracas", "Maiquetía") — NO es prueba de la
+  // ubicación del edificio y NO debe mover coords ni marcar conflicto (inundaría la cola).
+  const fuerte = cluster.length >= 2;
   const centro = cluster.length ? centroide(cluster) : (cands[0] || null);
 
   if (!centro) {
@@ -63,16 +66,27 @@ export function triangular({ geoActual = null, precisionActual = 'sector', candi
       // La fuente externa CONFIRMA la coord actual → alta confianza, no se mueve.
       return { geo: geoActual, confianza: 'alta', revisar: false, fuente_geo: 'confirmado_osm', movimiento_m: d };
     }
-    // Conflicto: externo vs actual difieren. Si la actual es aproximada (sector) y el
-    // externo concuerda consigo mismo, PROPONE el externo pero marca para revisión si
-    // el salto es grande. Si la actual es exacta, conserva y marca conflicto.
-    if (precisionActual === 'sector' && acuerdoExterno) {
-      return { geo: centro, confianza: d <= 1000 ? 'media' : 'baja', revisar: d > 1000, fuente_geo: 'osm_mejora', movimiento_m: d };
+    if (precisionActual === 'sector') {
+      // Mejora la coord aproximada solo con evidencia: cluster cercano (≤1km) o un único
+      // hit MUY cercano (≤600m, refinamiento plausible de un centroide de zona).
+      if ((fuerte && d <= 1000) || (!fuerte && d <= 600)) {
+        return { geo: centro, confianza: 'media', revisar: false, fuente_geo: 'osm_mejora', movimiento_m: d };
+      }
+      // Varios externos concuerdan lejos = conflicto real → a revisión. Un solo hit lejano
+      // (centroide de ciudad) = sin señal útil → conserva sin generar ruido.
+      return fuerte
+        ? { geo: geoActual, confianza: 'media', revisar: true, fuente_geo: 'conflicto', movimiento_m: d }
+        : { geo: geoActual, confianza: 'media', revisar: false, fuente_geo: 'sin_mejora_externa', movimiento_m: d };
     }
-    return { geo: geoActual, confianza: 'media', revisar: true, fuente_geo: 'conflicto', movimiento_m: d };
+    // Precisión EXACTA: la coord de fuente manda. Solo se marca conflicto si VARIOS
+    // externos concuerdan en otro punto lejano (evidencia de que la exacta podría errar).
+    return (fuerte && d > 150)
+      ? { geo: geoActual, confianza: 'media', revisar: true, fuente_geo: 'conflicto', movimiento_m: d }
+      : { geo: geoActual, confianza: 'alta', revisar: false, fuente_geo: 'sin_mejora_externa', movimiento_m: d };
   }
-  // No había coord: usa el externo. Alta si varios concuerdan, media si uno solo.
-  return { geo: centro, confianza: cluster.length >= 2 ? 'alta' : 'media', revisar: cluster.length < 2, fuente_geo: 'osm_nuevo', movimiento_m: 0 };
+  // No había coord: usa el externo para rellenar. Alta si varios concuerdan; si es un
+  // único hit (probable centroide de ciudad), colócalo a nivel zona sin marcar revisión.
+  return { geo: centro, confianza: fuerte ? 'alta' : 'baja', revisar: false, fuente_geo: 'osm_nuevo', movimiento_m: 0 };
 }
 
 // --- Wrapper con red: geocodifica las consultas y triangula ---
