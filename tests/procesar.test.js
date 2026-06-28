@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { extraer, extraerSeveridad, extraerNecesidades } from '../functions/lib/extraer.js';
 import { resumenDeterminista, construirEntradaIA, resumenIA } from '../functions/lib/resumen.js';
+import { extraerDireccion, consultasGeo, triangular } from '../functions/lib/geoenrich.js';
 
 describe('extraer — severidad', () => {
   it('"Daño parcial/total/severo" → severidad', () => {
@@ -127,5 +128,55 @@ describe('resumen — IA anclada (fetch mockeado) + guardas', () => {
     const fetchImpl = async () => ({ ok: false, json: async () => ({}) });
     const { via } = await resumenIA(rec, campos, { apiKey: 'k', fetchImpl });
     expect(via).toBe('reglas');
+  });
+});
+
+describe('geo-enricher — exactitud con info externa', () => {
+  it('extraerDireccion saca pistas de calle/sector del texto', () => {
+    const d = extraerDireccion('Edificación afectada. Urbanización Playa Grande, Calle Comercial N° 2. Estructura moderna.');
+    expect(d.join(' | ')).toMatch(/calle comercial/i);
+    expect(d.length).toBeGreaterThan(0);
+  });
+
+  it('consultasGeo arma consultas nombre/zona/dirección + Venezuela', () => {
+    const q = consultasGeo({ sector: 'Edificio Oasis Beach · Urimare', municipio: 'La Guaira', descripcion: 'Av. Principal con Calle Los Almendros' });
+    expect(q.some((x) => /Venezuela/.test(x))).toBe(true);
+    expect(q.some((x) => /Oasis Beach/.test(x))).toBe(true);
+  });
+
+  it('triangular: el externo CONFIRMA la coord actual (≤150m) → alta, no mueve', () => {
+    const r = triangular({ geoActual: { lat: 10.6100, lng: -67.0100 }, precisionActual: 'exacta', candidatos: [{ lat: 10.6112, lng: -67.0100 }] });
+    expect(r.confianza).toBe('alta');
+    expect(r.revisar).toBe(false);
+    expect(r.fuente_geo).toBe('confirmado_osm');
+    expect(r.geo.lat).toBe(10.6100);
+  });
+
+  it('triangular: actual aproximada (sector) + externo cercano → mejora la coord', () => {
+    const r = triangular({ geoActual: { lat: 10.6100, lng: -67.0200 }, precisionActual: 'sector', candidatos: [{ lat: 10.6120, lng: -67.0180 }] });
+    expect(r.fuente_geo).toBe('osm_mejora');
+    expect(r.geo.lat).toBeCloseTo(10.6120, 3);
+  });
+
+  it('triangular: actual EXACTA vs externo lejano → conflicto, conserva y marca revisión', () => {
+    const r = triangular({ geoActual: { lat: 10.6100, lng: -67.0100 }, precisionActual: 'exacta', candidatos: [{ lat: 10.7000, lng: -67.1000 }] });
+    expect(r.confianza).toBe('media');
+    expect(r.revisar).toBe(true);
+    expect(r.fuente_geo).toBe('conflicto');
+    expect(r.geo.lat).toBe(10.6100); // conserva la exacta
+  });
+
+  it('triangular: sin coord previa + 2 externos concordantes → coord nueva, alta', () => {
+    const r = triangular({ geoActual: null, candidatos: [{ lat: 10.6100, lng: -67.0100 }, { lat: 10.6105, lng: -67.0100 }] });
+    expect(r.fuente_geo).toBe('osm_nuevo');
+    expect(r.confianza).toBe('alta');
+    expect(r.geo.lat).toBeCloseTo(10.61025, 4);
+  });
+
+  it('triangular: sin externo ni coord → baja, marca revisión', () => {
+    const r = triangular({ geoActual: null, candidatos: [] });
+    expect(r.confianza).toBe('baja');
+    expect(r.revisar).toBe(true);
+    expect(r.geo).toBe(null);
   });
 });
