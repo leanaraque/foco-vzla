@@ -297,8 +297,14 @@ export const marcarAislados = onSchedule(
   { schedule: 'every 60 minutes', region: 'us-central1' },
   async () => {
     const corte = new Date(Date.now() - 6 * 60 * 60 * 1000); // 6 horas
+    // SOLO escala reportes INDIVIDUALES de la app (fuente=='web'): la salvaguarda del
+    // aislado (§22.5) protege un grito de ayuda CIUDADANO que no alcanzó N confirmaciones.
+    // Los LOTES MASIVOS de fuente (ingesta: fuente=='coordinador') NO escalan — son datos
+    // estructurados, ya visibles en el mapa marcados como no_verificada; escalarlos
+    // inundaba la cola del operador (cientos de edificios) y diluía su valor.
     const q = db.collection('necesidades')
       .where('verificacion', '==', 'no_verificada')
+      .where('fuente', '==', 'web')
       .where('creada_en', '<=', corte)
       .limit(200);
     const snap = await q.get();

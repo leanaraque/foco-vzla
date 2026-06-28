@@ -39,6 +39,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "verificacion", "order": "ASCENDING" },
+        { "fieldPath": "fuente", "order": "ASCENDING" },
+        { "fieldPath": "creada_en", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "necesidades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "verificacion", "order": "ASCENDING" },
         { "fieldPath": "creada_en", "order": "DESCENDING" }
       ]
     },
