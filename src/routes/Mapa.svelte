@@ -8,7 +8,7 @@
   import { app } from '../lib/firebase.js';
   import { normaliza } from '../lib/autocomplete.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
-  import { leerNecesidadesPublicas, leerRecursosPublicos, confirmarNecesidad } from '../lib/db.js';
+  import { leerNecesidadesPublicas, leerRecursosPublicos, confirmarNecesidad, cacheVieja } from '../lib/db.js';
   import MapaUnificado from '../components/MapaUnificado.svelte';
 
   const demo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
@@ -109,21 +109,36 @@
   }
 
   // --- carga ---
-  async function cargar(forzarServidor = false) {
-    cargando = true;
+  // `background`: revalidación silenciosa (no muestra el spinner principal; pinta lo que
+  // ya hay y solo intercambia los datos al llegar los frescos). Evita parpadeo al entrar.
+  let revalidando = false;
+  async function cargar(forzarServidor = false, background = false) {
+    if (background) revalidando = true; else cargando = true;
     try {
       const r = await leerNecesidadesPublicas({ forzarServidor, demo });
       items = r.items; origen = r.origen;
-      if (!demo) recursos = await leerRecursosPublicos({ forzarServidor }).catch(() => []);
-    } finally { cargando = false; }
+      if (!demo) recursos = await leerRecursosPublicos({ forzarServidor }).catch(() => recursos);
+    } finally { if (background) revalidando = false; else cargando = false; }
   }
+
+  // Stale-while-revalidate: si pintamos desde CACHÉ y esta superó la ventana de frescura
+  // (TTL), traemos 1 página de servidor en segundo plano y actualizamos sin botón. El TTL
+  // acota el costo: por más que el usuario entre/salga, a lo sumo 1 lectura por ventana.
+  // Si falla (offline), se conserva lo que ya estaba en pantalla.
+  async function revalidarSiHaceFalta() {
+    if (demo) return;
+    if (origen === 'cache' && cacheVieja()) {
+      try { await cargar(true, true); } catch (_) { /* offline/falla: mantenemos la caché */ }
+    }
+  }
+
   let cooldown = false;
   async function actualizar() {
     if (cooldown) return; cooldown = true; await cargar(true);
     setTimeout(() => (cooldown = false), 15000);
   }
 
-  let mq, onMq;
+  let mq, onMq, onVis;
   onMount(async () => {
     mq = window.matchMedia('(min-width: 900px)');
     esDesktop = mq.matches;
@@ -134,16 +149,24 @@
     const f = new URLSearchParams(window.location.search).get('focus');
     if (f) { enfocado = { id: f, t: Date.now() }; if (!esDesktop) vista = 'mapa'; }
     if (!demo) { try { await asegurarSesionAnonima(); } catch (_) { /* necesidades es público */ } }
-    await cargar(false);
+    await cargar(false);            // pinta al instante (caché o, en frío, servidor)
+    await revalidarSiHaceFalta();   // y refresca solo si la caché ya es vieja (sin botón)
+    // Al volver a la pestaña tras un rato (cambio de app, pantalla apagada), refresca
+    // solo si superó el TTL. Es el caso típico de "entré y vi datos viejos".
+    onVis = () => { if (document.visibilityState === 'visible') revalidarSiHaceFalta(); };
+    document.addEventListener('visibilitychange', onVis);
   });
-  onDestroy(() => { if (mq && onMq) mq.removeEventListener('change', onMq); });
+  onDestroy(() => {
+    if (mq && onMq) mq.removeEventListener('change', onMq);
+    if (onVis) document.removeEventListener('visibilitychange', onVis);
+  });
 </script>
 
 <div class="panel">
   <header class="cab">
     <h1>{$t('pmapa.titulo')}</h1>
-    <button class="actualizar" on:click={actualizar} disabled={cooldown || cargando}>
-      {cargando ? $t('mapa.actualizando') : $t('mapa.actualizar')}
+    <button class="actualizar" on:click={actualizar} disabled={cooldown || cargando || revalidando}>
+      {(cargando || revalidando) ? $t('mapa.actualizando') : $t('mapa.actualizar')}
     </button>
   </header>
 

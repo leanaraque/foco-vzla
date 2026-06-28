@@ -219,6 +219,27 @@ export function suscribirRecursos(cb) {
 // = a lo sumo 1 página por carga/refresco, y las relecturas salen de caché.
 // `pendiente_revision` (aislado) se prioriza en la UI; aquí traemos la página
 // reciente y la UI lo ordena al frente (salvaguarda §22.5: más visible, no menos).
+//
+// FRESCURA SIN ROMPER EL COSTO (stale-while-revalidate): la vista pinta desde caché
+// al instante (0 lecturas) y la UI decide si REVALIDAR contra el servidor en segundo
+// plano según la VENTANA DE FRESCURA. Marcamos el instante de cada lectura de servidor
+// (`marcarSync`) y exponemos `cacheVieja()` para que el componente revalide solo cuando
+// la caché superó el TTL → el dato se actualiza solo al entrar, pero el costo queda
+// acotado: por más recargas, a lo sumo 1 página servida cada TTL (§6.2-r1).
+export const TTL_FRESCURA_MS = 5 * 60 * 1000; // 5 min: ventana de frescura del mapa público
+const CLAVE_SYNC = 'foco_mapa_sync';          // ts (ms) de la última lectura de servidor
+
+// ms transcurridos desde la última lectura de servidor (Infinity si nunca se sincronizó).
+export function msDesdeUltimaSync() {
+  try {
+    const t = Number(localStorage.getItem(CLAVE_SYNC) || 0);
+    return t ? Date.now() - t : Infinity;
+  } catch (_) { return Infinity; }
+}
+// ¿La caché superó la ventana de frescura? → la UI revalida en segundo plano.
+export function cacheVieja(ttlMs = TTL_FRESCURA_MS) { return msDesdeUltimaSync() >= ttlMs; }
+function marcarSync() { try { localStorage.setItem(CLAVE_SYNC, String(Date.now())); } catch (_) { /* sin storage */ } }
+
 export async function leerNecesidadesPublicas({ forzarServidor = false, demo = false, max = 2000 } = {}) {
   // `max` mayor que el panel: el mapa público debe mostrar TODAS las necesidades
   // (no solo una página), y el buscador filtra sobre lo cargado. Sigue siendo una
@@ -234,7 +255,8 @@ export async function leerNecesidadesPublicas({ forzarServidor = false, demo = f
       }
     } catch (_) { /* sin caché → al servidor */ }
   }
-  const snap = await getDocs(q); // 1 página facturable; solo en frío o refresco manual
+  const snap = await getDocs(q); // 1 página facturable; solo en frío, refresco manual o revalidación por TTL
+  if (!demo) marcarSync();       // marca la frescura: revisitas dentro del TTL salen de caché (0 lecturas)
   // §25: se ocultan los duplicados marcados por el curador/migración (duplicado_de).
   return { items: snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.duplicado_de), origen: 'servidor' };
 }
