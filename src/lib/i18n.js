@@ -1,6 +1,8 @@
-// i18n mínimo (Spec §6.5 "bilingüe-ready"): español por defecto, estructura
-// preparada para añadir idiomas sin librería pesada. Para añadir 'en', basta con
-// otro diccionario y un selector.
+// i18n (Spec §6.5 "bilingüe-ready"): español por defecto + inglés. Sin librería
+// pesada (presupuesto de peso §6): dos diccionarios planos + un store derivado.
+// Para añadir un idioma: otro diccionario en `diccionarios` y una opción en el
+// selector (App.svelte). La clave faltante cae al texto en español (no a la clave
+// cruda) para que un hueco de traducción nunca muestre algo ilegible.
 import { writable, derived } from 'svelte/store';
 
 const diccionarios = {
@@ -22,6 +24,10 @@ const diccionarios = {
     'footer.repo_desc': 'Este proyecto es de código abierto. Míralo o despliega el tuyo.',
     'footer.api': 'API de datos',
     'footer.api_desc': 'API pública de datos abiertos (JSON/CSV) para desarrolladores y medios.',
+
+    'idioma.selector': 'Idioma',
+    'idioma.es': 'Español',
+    'idioma.en': 'English',
 
     'nav.inicio': 'Inicio',
     'nav.mapa': 'Mapa',
@@ -86,6 +92,12 @@ const diccionarios = {
     'intro.reportar': 'Reporta una necesidad tuya o de alguien cerca, en menos de un minuto. No promete rescate: la ven otros vecinos.',
     'intro.panel': 'Acceso para coordinadores verificados. ¿Coordinas ayuda? Postúlate abajo.',
     'intro.recursos': 'Ofrece lo que tengas (agua, transporte, refugio…) para que un vecino lo encuentre.',
+
+    // Avisos críticos (extraídos de los componentes a i18n)
+    'aviso.replicas_t': 'Las réplicas continúan',
+    'aviso.replicas_d': 'Existe peligro real en puentes e infraestructura. Aléjate de estructuras dañadas.',
+    'aviso.rescate_t': 'Silencio en zonas de rescate activo',
+    'aviso.rescate_d': 'Equipos profesionales ya están trabajando en el lugar. El ruido y la aglomeración dificultan escuchar señales de vida bajo los escombros. Si no eres rescatista, guarda silencio y mantén despejada la zona.',
 
     // Panel operativo de mapa (lista + mapa + filtros, principios de mapas de ops)
     'pmapa.titulo': 'Mapa de ayuda',
@@ -201,8 +213,10 @@ const diccionarios = {
     'reportar.mapa_ayuda': 'Mueve el pin (arrástralo o toca el mapa) a tu calle o edificio — así te encuentran. Solo el coordinador que tome el caso ve el punto exacto; el mapa público muestra el sector.',
     'reportar.mapa_marcado': 'Punto marcado en el mapa',
     'reportar.descripcion': 'Detalle breve',
+    'reportar.descripcion_ph': 'Detalle breve que ayude',
     'reportar.descripcion_aviso': 'Importante: no escribas datos personales (nombres completos, cédula, dirección exacta): la descripción se hace pública al verificarse. Para que te contacten, usa el campo de contacto — ese sí es privado.',
     'reportar.contacto': 'Contacto (opcional, privado)',
+    'reportar.contacto_ph': 'Teléfono o WhatsApp',
     'reportar.contacto_ayuda': 'Solo lo verá un coordinador que tome el caso. Nunca es público.',
     'reportar.enviar': 'Enviar reporte',
     'reportar.enviando': 'Enviando…',
@@ -360,15 +374,421 @@ const diccionarios = {
     'comun.cerrar': 'Cerrar',
     'comun.error': 'Ocurrió un error. Intenta de nuevo.',
     'comun.sin_conexion': 'Sin conexión',
-    'comun.opcional': 'opcional'
+    'comun.opcional': 'opcional',
+
+    // Lugar autocomplete (badge de resultado de OSM)
+    'lugar.osm_title': 'Resultado adicional de OpenStreetMap',
+
+    // Tiempo relativo (unidades y prefijo/sufijo)
+    'tiempo.min': 'min',
+    'tiempo.h': 'h',
+    'tiempo.d': 'd'
+  },
+
+  en: {
+    'app.nombre': 'Foco Venezuela',
+    'app.slogan': 'Aid, organized by all of us',
+    'app.tagline': 'Neighbors helping neighbors',
+
+    'banner.aviso': 'An open platform that organizes information during the emergency so that neighbors and organizations can coordinate help and save as many lives as possible.',
+
+    'footer.sugerencias': 'Feedback',
+    'footer.csv': 'Download data (CSV)',
+    'footer.tagline': 'Foco Venezuela · Aid, organized by all of us',
+    'footer.csv_cargando': 'Preparing…',
+    'footer.repo': 'Open source',
+    'footer.repo_desc': 'This project is open source. View it or deploy your own.',
+    'footer.api': 'Data API',
+    'footer.api_desc': 'Public open-data API (JSON/CSV) for developers and media.',
+
+    'idioma.selector': 'Language',
+    'idioma.es': 'Español',
+    'idioma.en': 'English',
+
+    'nav.inicio': 'Home',
+    'nav.mapa': 'Map',
+    'nav.reportar': 'Report',
+    'nav.panel': 'Panel',
+    'nav.recursos': 'Resources',
+
+    'inicio.kicker': 'Venezuela Earthquake · Jun 24, 2026',
+    'inicio.titulo': 'The help exists. It just needs to reach where it is needed most.',
+    'inicio.subtitulo': 'A live map of what is needed and what is available, so neighbors and brigades can act where it matters most.',
+    'inicio.puertas_aria': 'What do you need to do?',
+    'inicio.puerta_reportar_t': 'I need help',
+    'inicio.puerta_reportar_d': 'Report a need in under a minute',
+    'inicio.puerta_ayudar_t': 'I want to help',
+    'inicio.puerta_ayudar_d': 'See where help is needed right now',
+    'inicio.ofrecer': 'Offer a resource (water, transport, shelter…)',
+    'inicio.cargando': 'Loading data…',
+    'inicio.ahora': 'now',
+    'inicio.actualizado': 'updated',
+    'inicio.necesidades': 'needs',
+    'inicio.recursos': 'resources',
+    'inicio.pulso_titulo': 'The pulse of the emergency',
+    'inicio.pulso_rescate': 'Lives awaiting rescue',
+    'inicio.sub_rescate': 'trapped or with signs of life',
+    'inicio.def_rescate': 'Buildings with people reported trapped or showing signs of life who are still awaiting rescue. It does not mean teams are already working on site: these are the places that need rescue.',
+    'inicio.pulso_sin_atender': 'No status update',
+    'inicio.sub_sin_atender': 'no news on the platform yet',
+    'inicio.def_sin_atender': 'Reports without a status update on the platform. It does not mean no one is helping: there are national, international and volunteer teams on the ground who do not use it. It means we have no news of their status here yet. Anyone can confirm the case and a coordinator can update its status.',
+    'inicio.pulso_recursos': 'Available resources',
+    'inicio.sub_recursos': 'water · shelter · medical · transport',
+    'inicio.def_recursos': 'Help offered by neighbors and organizations: water, shelter, medical care, transport, food and more.',
+    'inicio.pulso_refugios': 'Shelters',
+    'inicio.sub_refugios': 'where to take shelter',
+    'inicio.def_refugios': 'Places set up to shelter affected people.',
+    'inicio.kpi_cerrar': 'Close',
+    'inicio.kpi_vacio': 'No points to show right now.',
+    'inicio.composicion_titulo': 'What is needed and what is available',
+    'inicio.proximamente': 'Coming soon: breakdown by category.',
+
+    'brecha.titulo': 'Where the gap is',
+    'brecha.lede': 'Needs and resources are not always in the same area. Where the red bar is long and the green one short, help is needed most.',
+    'brecha.necesidades': 'Needs',
+    'brecha.recursos': 'Resources',
+    'brecha.vacio': 'Not enough data yet to show the distribution by area.',
+    'brecha.nota': 'Areas estimated from approximate location. They are refined as reports are verified.',
+
+    'comp.lede': 'What the reports ask for versus what the available resources offer.',
+    'comp.necesita': 'What is needed',
+    'comp.disponible': 'What is available',
+    'comp.vacio': 'Not enough data yet to show the breakdown.',
+    'inicio.confianza_titulo': 'Where this data comes from',
+    'inicio.confianza_txt': 'We gather citizen reports and open data from several emergency platforms. The information is updated and verified continuously; the figures may change as each case is confirmed.',
+    'fuentes.lede': 'These are the sources of the information gathered so far.',
+    'fuentes.total': 'records in total',
+    'fuentes.ciudadanos': 'Citizen reports',
+
+    'intro.mapa': 'See the needs in your area and confirm the ones that are real. As neighbors we validate and help one another.',
+    'intro.reportar': 'Report a need of your own or someone nearby, in under a minute. It does not promise rescue: other neighbors see it.',
+    'intro.panel': 'Access for verified coordinators. Do you coordinate aid? Apply below.',
+    'intro.recursos': 'Offer what you have (water, transport, shelter…) so a neighbor can find it.',
+
+    'aviso.replicas_t': 'Aftershocks continue',
+    'aviso.replicas_d': 'There is real danger on bridges and infrastructure. Stay away from damaged structures.',
+    'aviso.rescate_t': 'Silence in active rescue zones',
+    'aviso.rescate_d': 'Professional teams are already working on site. Noise and crowding make it harder to hear signs of life under the rubble. If you are not a rescuer, keep silent and keep the area clear.',
+
+    'pmapa.titulo': 'Help map',
+    'pmapa.intro': 'All needs and resources in one place. Filter to find where to act.',
+    'pmapa.kpi_critica': 'Critical / rescue',
+    'pmapa.kpi_sin_atender': 'No update',
+    'pmapa.kpi_sin_atender_nota': '"No update" = no status news on the platform, not that no one is helping: there are teams on site who do not use it.',
+    'pmapa.kpi_recursos': 'Resources',
+    'pmapa.mostrando': 'Showing',
+    'pmapa.recurso': 'Resource',
+    'pmapa.sin_resultados': 'No results for these filters.',
+    'filtro.tipo_todo': 'All',
+    'filtro.tipo_nec': 'Needs',
+    'filtro.tipo_rec': 'Resources',
+    'filtro.cat_todas': 'All categories',
+    'filtro.urg_todas': 'Any urgency',
+    'filtro.estado_todos': 'Any status',
+    'filtro.limpiar': 'Clear filters',
+    'pmapa.pop_confirmar': 'Confirm this is real',
+    'pmapa.pop_resuelto': 'Report that help already arrived',
+    'pmapa.pop_corregir': 'Correct or add details',
+    'pmapa.confirmado_ok': 'Thank you. Confirmed.',
+    'corr.titulo': 'Correct or add details',
+    'corr.intro': 'Help us improve this point. Your input reaches a coordinator for review.',
+    'corr.detalle': 'What needs to be corrected or added?',
+    'corr.detalle_ph': 'E.g.: the correct category is medical, the building is another one, there are more people, the contact changed…',
+    'corr.falta': 'Tell us what needs to be corrected or added.',
+    'corr.ok': 'Thank you. A coordinator will review your input.',
+    'resol.titulo': 'Did help already arrive here?',
+    'resol.intro': 'Thanks for letting us know. This reaches a coordinator to review and close it. Tell us briefly:',
+    'resol.motivo': 'Why do you think it was already handled?',
+    'resol.motivo_ph': 'E.g.: help already arrived, the people were rescued, the resource is gone…',
+    'resol.fuente': 'How do you know?',
+    'resol.fuente_ph': 'E.g.: I saw it in person, a relative told me…',
+    'resol.contacto': 'Your contact (optional, for follow-up)',
+    'resol.enviar': 'Send to a coordinator',
+    'resol.enviando': 'Sending…',
+    'resol.ok': 'Thank you. A coordinator will review it and close it if appropriate.',
+    'resol.error': 'Could not send. Please try again in a moment.',
+    'resol.espera': 'Please wait a moment before sending another request.',
+    'resol.falta': 'Tell us at least why you think it is resolved.',
+    'resol.cancelar': 'Cancel',
+
+    'mapa.titulo': 'Needs near you',
+    'mapa.lista': 'List',
+    'mapa.mapa': 'Map',
+    'mapa.actualizar': 'Refresh',
+    'mapa.actualizando': 'Refreshing…',
+    'mapa.buscar_ph': 'Search by area, building, type…',
+    'mapa.sin_resultados': 'No results for your search.',
+    'leyenda.necesidad': 'Need',
+    'leyenda.rescate': 'Critical / rescue',
+    'leyenda.recurso': 'Resource',
+    'leyenda.tu_punto': 'Your location',
+    'mapa.desde_cache': 'Showing saved data. Tap Refresh for the latest.',
+    'mapa.vacio': 'No needs to show yet.',
+    'mapa.sector_aviso': 'Approximate location at sector level to protect people.',
+    'mapa.confirmar': 'Confirm this is real',
+    'mapa.confirmando': 'Confirming…',
+    'mapa.ya_confirmaste': 'You already confirmed this need. Thank you.',
+    'mapa.confirmaciones': 'confirmations',
+    'mapa.como_ayudar': 'How to help?',
+    'mapa.como_ayudar_texto': 'If you can get close or contribute what is requested, do so carefully and in coordination with other neighbors. FOCO does not organize rescue or guarantee a response.',
+    'mapa.cerrar': 'Close',
+    'mapa.revisar': 'Priority case — pending operator review',
+
+    'verif.confirmada': 'Confirmed by neighbors',
+    'verif.pendiente_revision': 'Priority · to review',
+
+    'cat.rescate': 'Rescue',
+    'cat.medico': 'Medical',
+    'cat.agua': 'Water',
+    'cat.alimento': 'Food',
+    'cat.refugio': 'Shelter',
+    'cat.transporte': 'Transport',
+    'cat.servicios': 'Utilities',
+    'cat.acopio': 'Collection point',
+    'cat.otro': 'Other',
+
+    'urg.critica': 'Critical',
+    'urg.alta': 'High',
+    'urg.media': 'Medium',
+
+    'estado.sin_atender': 'No update',
+    'estado.asignada': 'Assigned',
+    'estado.resuelta': 'Resolved',
+    'estado.cerrada_invalida': 'Closed (invalid)',
+
+    'verif.no_verificada': 'Unverified',
+    'verif.verificada': 'Verified',
+
+    'reportar.titulo': 'Report a need',
+    'reportar.categoria': 'What is needed?',
+    'reportar.urgencia': 'Urgency',
+    'reportar.ubicacion': 'Location (sector / reference)',
+    'reportar.ubicacion_ayuda': 'Search your area to center the map; then move the pin to the exact spot.',
+    'reportar.ubicacion_ph': 'Search your area: sector, square, hospital…',
+    'reportar.lugar_elegido': 'Chosen place',
+    'reportar.quitar_lugar': 'Remove chosen place',
+    'reportar.sin_coincidencias': 'No matches. You can type the reference by hand.',
+    'reportar.buscando_mas': 'Searching for more places on OpenStreetMap…',
+    'reportar.usar_gps': 'Use my location',
+    'reportar.gps_ok': 'location ready',
+    'reportar.gps_error': 'not available',
+    'reportar.marcado': 'marked',
+    'reportar.mapa_titulo': 'Mark the exact spot (recommended)',
+    'reportar.mapa_toggle': 'Show the map to mark the spot',
+    'reportar.mapa_ocultar': 'Hide the map',
+    'reportar.mapa_ayuda': 'Move the pin (drag it or tap the map) to your street or building — that is how they find you. Only the coordinator who takes the case sees the exact spot; the public map shows the sector.',
+    'reportar.mapa_marcado': 'Spot marked on the map',
+    'reportar.descripcion': 'Brief detail',
+    'reportar.descripcion_ph': 'A brief, helpful detail',
+    'reportar.descripcion_aviso': 'Important: do not write personal data (full names, ID number, exact address): the description becomes public once verified. To be contacted, use the contact field — that one is private.',
+    'reportar.contacto': 'Contact (optional, private)',
+    'reportar.contacto_ph': 'Phone or WhatsApp',
+    'reportar.contacto_ayuda': 'Only a coordinator who takes the case will see it. It is never public.',
+    'reportar.enviar': 'Send report',
+    'reportar.enviando': 'Sending…',
+    'reportar.ok': 'Report received. Thank you.',
+    'reportar.ok_offline': 'Saved offline. It will be sent when the signal returns.',
+    'reportar.otro': 'Report another need',
+    'reportar.falta_ubicacion': 'Provide a location or use GPS.',
+
+    'reportar.para_quien': 'Who is it for?',
+    'pq.yo': 'For me', 'pq.familiar': 'A relative', 'pq.vecino': 'A neighbor', 'pq.desconocido': 'Not sure / someone',
+    'reportar.personas': 'How many people?',
+    'pers.1': '1', 'pers.2-5': '2 to 5', 'pers.6-20': '6 to 20', 'pers.+20': 'More than 20',
+    'reportar.si': 'Yes', 'reportar.no': 'No',
+    'reportar.atrapados': 'Are there people trapped?',
+    'reportar.atrapados_cuantas': 'How many people trapped?',
+    'reportar.con_vida': 'Are there signs of life or contact with them?',
+    'reportar.desde': 'Since when?',
+    'desde.<6h': 'Less than 6 h', 'desde.6-24h': '6 to 24 h', 'desde.+24h': 'More than 24 h',
+    'reportar.severidad': 'Building damage',
+    'sev.total': 'Total / collapse', 'sev.severo': 'Severe', 'sev.parcial': 'Partial', 'sev.desconocida': 'Not sure',
+    'reportar.medico_tipo': 'Type of medical emergency',
+    'med.herido': 'Injured', 'med.medicamento_critico': 'Critical medication', 'med.atencion': 'Care',
+    'reportar.medicamento': 'Which medication?',
+    'medic.insulina': 'Insulin', 'medic.oxigeno': 'Oxygen', 'medic.dialisis': 'Dialysis', 'medic.otro': 'Other',
+    'reportar.cantidad_personas': 'For how many people?',
+    'reportar.cantidad_dias': 'For how many days?',
+    'reportar.vulnerables': 'Are there vulnerable people?',
+    'vuln.ninos': 'Children', 'vuln.mayores': 'Older adults', 'vuln.discapacidad': 'Disability',
+    'vuln.embarazadas': 'Pregnant', 'vuln.heridos': 'Injured', 'vuln.cronicos': 'Chronic illness',
+    'reportar.riesgos': 'On-site risks (for whoever helps)',
+    'riesgo.gas': 'Gas', 'riesgo.fuego': 'Fire', 'riesgo.colapso': 'Collapse', 'riesgo.electricidad': 'Electricity', 'riesgo.agua': 'Water / flooding',
+    'reportar.como_llegar': 'How to get there (floor, unit, reference)',
+    'reportar.como_llegar_ayuda': 'Private: only the coordinator who takes the case sees it. E.g.: "3rd floor, unit 3B, blue gate".',
+    'reportar.contacto_alterno': 'Alternate contact (a relative)',
+    'reportar.mas_detalles': 'Add details (they help whoever assists you)',
+    'reportar.menos_detalles': 'Hide details',
+    'reportar.contexto': 'Anything else that helps (optional)',
+    'reportar.falta_para_quien': 'Indicate who the report is for.',
+    'reportar.falta_personas': 'Indicate how many people.',
+
+    'panel.titulo': 'Coordination panel',
+    'panel.lista': 'List',
+    'panel.mapa': 'Map',
+    'panel.filtros': 'Filters',
+    'panel.ver_no_verificadas': 'Also show unverified',
+    'panel.todas_categorias': 'All categories',
+    'panel.todas_urgencias': 'Any urgency',
+    'panel.vacio': 'No needs with these filters.',
+    'panel.cargar_mas': 'Load more',
+    'panel.solicitudes': 'Requests',
+    'panel.por_revisar': 'To review',
+    'panel.por_revisar_titulo': 'Priority cases to review',
+    'panel.por_revisar_intro': 'Reports the community could not confirm (possible isolated cases). Approve the real ones or mark them invalid. Use the filters above (category / urgency) to narrow the queue.',
+    'panel.por_revisar_vacio': 'No cases pending review with these filters.',
+    'panel.por_revisar_total': 'Showing {n} cases to review.',
+    'panel.por_revisar_capado': 'the view limit was reached — filter by category/urgency to see the rest.',
+
+    'panel.ubicacion': 'Location',
+    'panel.ubic_titulo': 'Points with doubtful location',
+    'panel.ubic_intro': 'Reports whose coordinates fall OUTSIDE the earthquake zone (north-central coast). They are usually geocoding errors: a name that matched another place in the country. Review and correct the pin; some may be legitimate reports from another city.',
+    'panel.ubic_total': 'Showing {n} points outside the zone.',
+    'panel.ubic_vacio': 'No points outside the affected zone. Good.',
+    'panel.ubic_recargar': 'Reload',
+    'ubic.fuera': 'Outside the earthquake zone',
+    'ubic.prec_exacta': 'Exact location',
+    'ubic.prec_sector': 'Sector level (~1 km)',
+    'ubic.coord_actual': 'Current coordinate',
+    'ubic.corregir': 'Correct location',
+    'ubic.centrar': 'Center on affected zone',
+    'ubic.nota': 'Drag the pin (or tap the map) to the correct spot. For buildings the public location is exact; for people it is stored at sector level and the exact one stays private.',
+    'ubic.aplicar': 'Save location',
+    'ubic.aplicando': 'Saving…',
+    'ubic.cancelar': 'Cancel',
+    'ubic.corregido': 'Location corrected.',
+    'ubic.error': 'Could not save. Please try again.',
+    'ubic.ver_mapa': 'View on the map',
+
+    'sol.titulo': 'Community requests',
+    'sol.intro': 'Notices from people about map points: that help already arrived, or corrections. Review them and close them.',
+    'sol.vacio': 'No pending requests. Good work.',
+    'sol.ver_gestionadas': 'Also show handled',
+    'sol.tipo_resuelto': 'Help already arrived',
+    'sol.tipo_correccion': 'Correction',
+    'sol.contexto': 'Reported point',
+    'sol.motivo': 'Why do they think it was handled?',
+    'sol.fuente': 'How do they know?',
+    'sol.detalle': 'Correction or detail provided',
+    'sol.contacto': 'Reporter contact',
+    'sol.sin_dato': '—',
+    'sol.ver_mapa': 'View on the map',
+    'sol.marcar_resuelta': 'Mark the need as resolved',
+    'sol.gestionada': 'Mark handled',
+    'sol.descartar': 'Dismiss',
+    'sol.estado_gestionada': 'Handled',
+    'sol.estado_descartada': 'Dismissed',
+    'sol.confirma_resolver': 'This will change the need status to "resolved". Continue?',
+    'sol.error': 'Could not complete the action. Please try again.',
+    'sol.gestionar': 'Handle',
+    'sol.edit_titulo': 'Edit the report and apply the correction',
+    'sol.edit_intro': 'Adjust the report data according to the correction. Only what you change is saved.',
+    'sol.edit_urgencia': 'Urgency',
+    'sol.edit_categoria': 'Category',
+    'sol.edit_descripcion': 'Description',
+    'sol.edit_sector': 'Sector / reference',
+    'sol.edit_contacto': 'Contact / phone (private)',
+    'sol.edit_ubicacion': 'Location (drag the pin to correct it)',
+    'sol.edit_ubicacion_nota': 'The public location stays approximate at sector level; the exact coordinates remain for coordination only.',
+    'sol.edit_aplicar': 'Apply changes and mark handled',
+    'sol.edit_aplicando': 'Applying…',
+    'sol.edit_cancelar': 'Cancel',
+    'sol.edit_cargando': 'Loading the report…',
+
+    'accion.reclamar': "I'll take this",
+    'accion.resolver': 'Mark resolved',
+    'accion.reabrir': 'Reopen',
+    'accion.verificar': 'Verify',
+    'accion.aprobar_revision': 'Approve (reviewed)',
+    'accion.invalidar': 'Mark invalid',
+    'accion.ver_contacto': 'View contact',
+    'reclamada_por': 'Handled by',
+
+    'recursos.titulo': 'Available resources',
+    'recursos.registrar': 'Register a resource',
+    'recursos.vacio': 'No resources registered yet.',
+    'recursos.disponible': 'Available',
+
+    'coordform.titulo': 'Do you coordinate aid? Apply',
+    'coordform.intro': 'If you organize aid with a brigade, NGO or neighborhood group, tell us and we will enable you as a verified coordinator.',
+    'coordform.nombre': 'Name',
+    'coordform.org': 'Organization or group',
+    'coordform.zona': 'Area where you operate',
+    'coordform.contacto': 'Contact (email or phone)',
+    'coordform.motivo': 'How do you help? (brief)',
+    'coordform.enviar': 'Send application',
+    'coordform.enviando': 'Sending…',
+    'coordform.ok': 'Thank you! We received your application and will contact you.',
+    'coordform.error': 'Could not send. Please try again in a moment.',
+    'coordform.faltan': 'Fill in at least name, area and contact.',
+    'coordform.espera': 'Please wait a moment before sending again.',
+
+    'auth.coord_titulo': 'Coordinator access',
+    'auth.email': 'Email',
+    'auth.password': 'Password',
+    'auth.entrar': 'Sign in',
+    'auth.salir': 'Sign out',
+    'auth.error': 'Could not sign in. Check your details.',
+    'auth.no_coord': 'Your account is not enabled as a verified coordinator yet.',
+
+    'comun.cancelar': 'Cancel',
+    'comun.guardar': 'Save',
+    'comun.cerrar': 'Close',
+    'comun.error': 'An error occurred. Please try again.',
+    'comun.sin_conexion': 'Offline',
+    'comun.opcional': 'optional',
+
+    'lugar.osm_title': 'Additional result from OpenStreetMap',
+
+    'tiempo.min': 'min',
+    'tiempo.h': 'h',
+    'tiempo.d': 'd'
   }
 };
 
-export const locale = writable('es');
+const IDIOMAS = ['es', 'en'];
+const CLAVE_LOCALE = 'foco_locale';
+
+// Detecta el idioma inicial: preferencia guardada → idioma del navegador (en → 'en',
+// resto → 'es') → 'es' por defecto. Defensivo ante entornos sin storage/navigator.
+function detectarLocale() {
+  try {
+    const guardado = localStorage.getItem(CLAVE_LOCALE);
+    if (IDIOMAS.includes(guardado)) return guardado;
+  } catch (_) { /* sin storage */ }
+  try {
+    const nav = (navigator.language || navigator.userLanguage || 'es').toLowerCase();
+    return nav.startsWith('en') ? 'en' : 'es';
+  } catch (_) { /* sin navigator */ }
+  return 'es';
+}
+
+export const locale = writable(detectarLocale());
+
+// Persiste la preferencia y refleja el idioma en <html lang> (accesibilidad/SEO).
+locale.subscribe((l) => {
+  try { localStorage.setItem(CLAVE_LOCALE, l); } catch (_) { /* sin storage */ }
+  try { if (typeof document !== 'undefined') document.documentElement.lang = l; } catch (_) { /* sin DOM */ }
+});
+
+export function setLocale(l) {
+  if (IDIOMAS.includes(l)) locale.set(l);
+}
 
 export const t = derived(locale, ($locale) => {
   const dic = diccionarios[$locale] || diccionarios.es;
-  return (clave) => dic[clave] ?? clave;
+  // Hueco de traducción → cae al español (legible), nunca a la clave cruda.
+  return (clave) => dic[clave] ?? diccionarios.es[clave] ?? clave;
+});
+
+// Texto de una necesidad según idioma: en inglés prefiere `resumen_en` (traducción del
+// pipeline, §Fase B) y cae a `resumen`/`descripcion` (español) si aún no está traducida.
+// En español usa `resumen` (saneado) o `descripcion`. Es un store derivado del idioma
+// para que el render reaccione al cambiar de idioma, igual que `t`.
+export const textoNec = derived(locale, ($locale) => (n) => {
+  if (!n) return '';
+  if ($locale === 'en') return n.resumen_en || n.resumen || n.descripcion || '';
+  return n.resumen || n.descripcion || '';
 });
 
 // Líneas oficiales (Spec §5). Ajustar a los números vigentes durante la operación.

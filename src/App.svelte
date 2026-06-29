@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { t } from './lib/i18n.js';
+  import { t, locale, setLocale } from './lib/i18n.js';
   import { online } from './lib/stores.js';
   import EmergencyBanner from './components/EmergencyBanner.svelte';
   import AvisoRescate from './components/AvisoRescate.svelte';
@@ -79,9 +79,23 @@
       <span class="marca-slogan">{$t('app.slogan')}</span>
     </span>
   </a>
-  {#if !$online}
-    <span class="offline" title={$t('comun.sin_conexion')}>{$t('comun.sin_conexion')}</span>
-  {/if}
+  <div class="cab-fin">
+    {#if !$online}
+      <span class="offline" title={$t('comun.sin_conexion')}>{$t('comun.sin_conexion')}</span>
+    {/if}
+    <div class="idioma" role="group" aria-label={$t('idioma.selector')}>
+      <button
+        class:activo={$locale === 'es'}
+        aria-pressed={$locale === 'es'}
+        on:click={() => setLocale('es')}
+      >ES</button>
+      <button
+        class:activo={$locale === 'en'}
+        aria-pressed={$locale === 'en'}
+        on:click={() => setLocale('en')}
+      >EN</button>
+    </div>
+  </div>
 </header>
 
 <!-- Banner permanente (Spec §5 y DoD §8): visible en TODAS las vistas -->
@@ -144,6 +158,16 @@
   .marca-slogan { font-size: 0.72rem; font-weight: 500; color: rgba(255,255,255,0.82); }
   .offline { background: var(--amarillo); color: #4a3b00; font-weight: 700; font-size: 0.78rem; padding: 0.2rem 0.5rem 0.2rem 0.45rem; border-radius: 999px; }
   .offline::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #b45309; margin-right: 0.35rem; vertical-align: middle; }
+  .cab-fin { display: flex; align-items: center; gap: 0.55rem; }
+  /* Selector de idioma: dos chips ES/EN sobrios sobre el header azul. */
+  .idioma { display: inline-flex; border: 1px solid rgba(255,255,255,0.45); border-radius: 999px; overflow: hidden; }
+  .idioma button {
+    background: none; border: none; color: rgba(255,255,255,0.82);
+    font-weight: 700; font-size: 0.74rem; letter-spacing: 0.3px;
+    padding: 0.22rem 0.5rem; cursor: pointer; min-height: 0;
+  }
+  .idioma button.activo { background: #fff; color: var(--azul); }
+  .idioma button:not(.activo):hover { color: #fff; }
 
   /* La tabbar es fija abajo; reservamos su alto para que NADA quede tapado. */
   :global(body) { padding-bottom: 3.5rem; }

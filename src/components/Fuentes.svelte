@@ -19,15 +19,17 @@
     IMPORT_LAGUAIRA: 'Carga del operador'
   };
 
-  function fuenteDe(it) {
-    const sis = Array.isArray(it.fuentes) && it.fuentes[0]?.sistema; // §25 (futuro)
-    if (sis) return sis;
-    const c = it.creador || '';
-    return MAPA[c] || $t('fuentes.ciudadanos'); // uids reales → reportes ciudadanos
-  }
-
   $: todos = [...necesidades, ...recursos];
+  // Se referencia `$t('fuentes.ciudadanos')` DENTRO del bloque reactivo para que Svelte
+  // rastree la dependencia de idioma y recompute al cambiar locale (si la llamada a $t
+  // viviera oculta en una función auxiliar, el cambio de idioma no recomputaría).
   $: fuentes = (() => {
+    const ciudadanos = $t('fuentes.ciudadanos'); // uids reales → reportes ciudadanos
+    const fuenteDe = (it) => {
+      const sis = Array.isArray(it.fuentes) && it.fuentes[0]?.sistema; // §25 (futuro)
+      if (sis) return sis;
+      return MAPA[it.creador || ''] || ciudadanos;
+    };
     const m = new Map();
     for (const it of todos) { const f = fuenteDe(it); m.set(f, (m.get(f) || 0) + 1); }
     return [...m.entries()].map(([nombre, n]) => ({ nombre, n })).sort((a, b) => b.n - a.n);

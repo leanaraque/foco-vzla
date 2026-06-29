@@ -19,8 +19,11 @@
   $: maxNec = Math.max(1, ...nec.map((x) => x.n));
   $: maxRec = Math.max(1, ...rec.map((x) => x.n));
   const pct = (v, m) => (v <= 0 ? 0 : Math.max(4, Math.round((v / m) * 100)));
-  // Etiqueta legible de la categoría; si no hay traducción, usa el id crudo.
-  const etiqueta = (c) => { const k = 'cat.' + c; const v = $t(k); return v === k ? c : v; };
+  // Etiqueta legible de la categoría; si no hay traducción, usa el id crudo. Se deriva
+  // de `$t` con `$:` para que REACCIONE al cambiar de idioma (si la dependencia de $t
+  // quedara oculta dentro de la función, Svelte no la recomputaría al cambiar locale).
+  const makeEtiqueta = (translate) => (c) => { const k = 'cat.' + c; const v = translate(k); return v === k ? c : v; };
+  $: etiqueta = makeEtiqueta($t);
 </script>
 
 <section class="bloque">

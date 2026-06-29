@@ -1,14 +1,14 @@
 <script>
   // Aviso de RÉPLICAS: las réplicas continúan; peligro real en puentes e infraestructura.
   // Va DEBAJO del aviso de silencio (no sticky: scrollea). Naranja para distinguirlo del
-  // rojo (silencio, crítico) y el amarillo (informativo). AUTOCONTENIDO (ES inline): no
-  // depende de i18n.js (en edición paralela en otra máquina). Sin emojis.
+  // rojo (silencio, crítico) y el amarillo (informativo). Texto i18n (ES/EN) vía i18n.js.
+  import { t } from '../lib/i18n.js';
 </script>
 
 <div class="aviso" role="alert">
   <div class="inner">
-    <strong>Las réplicas continúan</strong>
-    <span>Existe peligro real en puentes e infraestructura. Aléjate de estructuras dañadas.</span>
+    <strong>{$t('aviso.replicas_t')}</strong>
+    <span>{$t('aviso.replicas_d')}</span>
   </div>
 </div>
 

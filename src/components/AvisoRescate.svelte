@@ -2,17 +2,14 @@
   // AVISO CRÍTICO (vida en riesgo): silencio en las zonas de rescate y NO acudir a esos
   // puntos. Va DEBAJO del banner de "plataforma abierta" (segunda notificación). Texto
   // breve, enfocado. Visible en TODA la web (montado global en App.svelte). Sin emojis.
-  // AUTOCONTENIDO (ES inline): no depende de i18n.js (que se edita en paralelo).
+  // Texto i18n (ES/EN) vía i18n.js.
+  import { t } from '../lib/i18n.js';
 </script>
 
 <div class="aviso" role="alert">
   <div class="inner">
-    <strong>Silencio en zonas de rescate activo</strong>
-    <p>
-      <b>Equipos profesionales ya están trabajando en el lugar.</b> El ruido y la aglomeración
-      impiden oír a posibles <b>sobrevivientes bajo los escombros</b>. Si estás cerca,
-      <b>haz silencio</b>; y si pensabas acudir, <b>evita acercarte</b>: menos gente, menos ruido.
-    </p>
+    <strong>{$t('aviso.rescate_t')}</strong>
+    <p>{$t('aviso.rescate_d')}</p>
   </div>
 </div>
 

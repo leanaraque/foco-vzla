@@ -274,12 +274,12 @@
 
     <!-- 7) Contexto opcional -->
     <label for="desc">{$t('reportar.contexto')} <span class="ayuda">({$t('comun.opcional')})</span></label>
-    <textarea id="desc" bind:value={descripcion} maxlength="500" placeholder="Detalle breve que ayude"></textarea>
+    <textarea id="desc" bind:value={descripcion} maxlength="500" placeholder={$t('reportar.descripcion_ph')}></textarea>
     <p class="aviso-publico">{$t('reportar.descripcion_aviso')}</p>
 
     <!-- 8) Contacto privado -->
     <label for="contacto">{$t('reportar.contacto')} <span class="ayuda">({$t('comun.opcional')})</span></label>
-    <input id="contacto" bind:value={contacto} inputmode="tel" placeholder="Teléfono o WhatsApp" />
+    <input id="contacto" bind:value={contacto} inputmode="tel" placeholder={$t('reportar.contacto_ph')} />
     <p class="ayuda">{$t('reportar.contacto_ayuda')}</p>
 
     <button class="btn-primario btn-bloque btn-grande" style="margin-top:1rem" on:click={enviar} disabled={enviando}>

@@ -189,7 +189,7 @@
           >
             <span class="nom">
               <span class="nom-txt">{#each marcar(l.nombre, qActual) as parte}{#if parte.match}<mark>{parte.t}</mark>{:else}{parte.t}{/if}{/each}</span>
-              {#if l._origen === 'photon'}<span class="badge-osm" title="Resultado adicional de OpenStreetMap">+ OSM</span>{/if}
+              {#if l._origen === 'photon'}<span class="badge-osm" title={$t('lugar.osm_title')}>+ OSM</span>{/if}
             </span>
             <span class="sub">{l.tipo} · {#each marcar(l.municipio, qActual) as parte}{#if parte.match}<mark>{parte.t}</mark>{:else}{parte.t}{/if}{/each}</span>
           </li>

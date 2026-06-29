@@ -85,10 +85,10 @@
     if (!d) return '';
     const min = Math.round((Date.now() - d.getTime()) / 60000);
     if (min < 1) return $t('inicio.ahora');
-    if (min < 60) return `${min} min`;
+    if (min < 60) return `${min} ${$t('tiempo.min')}`;
     const h = Math.round(min / 60);
-    if (h < 24) return `${h} h`;
-    return `${Math.round(h / 24)} d`;
+    if (h < 24) return `${h} ${$t('tiempo.h')}`;
+    return `${Math.round(h / 24)} ${$t('tiempo.d')}`;
   }
 
   // KPI clickeable → abre un mapa filtrado SOLO a los puntos de ese KPI.
