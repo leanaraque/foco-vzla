@@ -4,7 +4,7 @@
   // Presentación: consume db.js (read-only) + invoca la callable solicitarResolucion
   // (Resend) para avisar a un coordinador. Reutiliza MapaUnificado. Mobile-first.
   import { onMount, onDestroy } from 'svelte';
-  import { t, textoNec } from '../lib/i18n.js';
+  import { t, textoNec, tiempo } from '../lib/i18n.js';
   import { app } from '../lib/firebase.js';
   import { normaliza } from '../lib/autocomplete.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
@@ -229,6 +229,7 @@
               </div>
               <div class="sector-txt">{n.sector}</div>
               {#if $textoNec(n)}<p class="desc">{$textoNec(n)}</p>{/if}
+              {#if $tiempo.rel(n.creada_en)}<p class="sello" class:viejo={$tiempo.viejo(n.creada_en)} title={$tiempo.abs(n.creada_en)}>{$t('tiempo.subido')} {$tiempo.rel(n.creada_en)}</p>{/if}
             </button>
           {/each}
           {#each recFiltrados as r (r.id)}
@@ -239,6 +240,7 @@
               </div>
               <div class="sector-txt">{r.sector}</div>
               {#if r.descripcion}<p class="desc">{r.descripcion}</p>{/if}
+              {#if $tiempo.rel(r.creada_en)}<p class="sello" class:viejo={$tiempo.viejo(r.creada_en)} title={$tiempo.abs(r.creada_en)}>{$t('tiempo.subido')} {$tiempo.rel(r.creada_en)}</p>{/if}
             </button>
           {/each}
         {/if}
@@ -334,6 +336,9 @@
   .tag-resuelta { background: #dcfce7; color: #166534; }
   .sector-txt { font-weight: 600; }
   .desc { margin: 0.3rem 0 0; color: var(--texto); }
+  /* Sello de frescura: cuándo se subió (nuevo vs. antiguo) — lectura limpia. */
+  .sello { margin: 0.25rem 0 0; font-size: 0.76rem; color: var(--gris); font-variant-numeric: tabular-nums; }
+  .sello.viejo { color: #b45309; }
   .ayuda { color: var(--gris); }
 
   @media (min-width: 900px) {

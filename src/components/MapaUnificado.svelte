@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-  import { t, textoNec } from '../lib/i18n.js';
+  import { t, textoNec, tiempo } from '../lib/i18n.js';
 
   // UN SOLO mapa para toda la app: muestra necesidades y recursos como marcadores,
   // y opcionalmente un PIN arrastrable (modo reporte). Mismo estilo/tiles siempre.
@@ -60,6 +60,15 @@
       + `</div>`;
   }
 
+  // Sello de frescura para el popup (HTML): cuándo se subió el punto. Localizado y
+  // reactivo al idioma ($tiempo/$t auto-suscritos). title con la fecha absoluta.
+  function selloHtml(ts) {
+    const rel = $tiempo.rel(ts);
+    if (!rel) return '';
+    const cls = $tiempo.viejo(ts) ? 'pop-sello viejo' : 'pop-sello';
+    return `<div class="${cls}" title="${esc($tiempo.abs(ts))}">${esc($t('tiempo.subido'))} ${esc(rel)}</div>`;
+  }
+
   function dibujar() {
     if (!mapa || !L) return;
     capaNec.clearLayers();
@@ -71,7 +80,7 @@
       const activo = n.rescate_activo === true;
       const color = activo ? '#e63946' : (colorUrg[n.urgencia] || '#1666a0');
       const m = L.marker([n.geo.lat, n.geo.lng], { icon: dotIcon(color, activo), pane: 'necPane', _activo: activo, _grupo: 'nec' });
-      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc($textoNec(n))}${accionesHtml(n)}`);
+      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc($textoNec(n))}${selloHtml(n.creada_en)}${accionesHtml(n)}`);
       if (n.id) markerPorId.set(n.id, m);
       mN.push(m);
       pts.push([n.geo.lat, n.geo.lng]);
@@ -79,7 +88,7 @@
     for (const r of recursos) {
       if (!r.geo?.lat) continue;
       const m = L.marker([r.geo.lat, r.geo.lng], { icon: dotIcon(VERDE, false), pane: 'recPane', _grupo: 'rec' });
-      m.bindPopup(`<b>${$t('recursos.disponible')}: ${$t('cat.' + r.categoria) || r.categoria}</b><br>${esc(r.sector || '')}<br>${esc(r.descripcion || '')}`);
+      m.bindPopup(`<b>${$t('recursos.disponible')}: ${$t('cat.' + r.categoria) || r.categoria}</b><br>${esc(r.sector || '')}<br>${esc(r.descripcion || '')}${selloHtml(r.creada_en)}`);
       if (r.id) markerPorId.set(r.id, m);
       mR.push(m);
       pts.push([r.geo.lat, r.geo.lng]);
@@ -216,6 +225,9 @@
   .leyenda span { display: inline-flex; align-items: center; gap: 0.25rem; }
   .leyenda i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
   .leyenda i.pin-i { width: 9px; height: 13px; border-radius: 50% 50% 50% 0; transform: rotate(45deg); background: #e63946; }
+  /* Sello de frescura dentro del popup (Leaflet renderiza fuera del scope → :global). */
+  :global(.pop-sello) { margin-top: 0.3rem; font-size: 0.74rem; color: #5b6670; font-variant-numeric: tabular-nums; }
+  :global(.pop-sello.viejo) { color: #b45309; }
   :global(.foco-pin) { background: none; border: none; }
   :global(.foco-pin svg) { filter: drop-shadow(0 2px 2px rgba(0,0,0,0.35)); cursor: grab; }
   :global(.foco-pin:active svg) { cursor: grabbing; }

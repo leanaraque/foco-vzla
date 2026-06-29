@@ -1,6 +1,6 @@
 <script>
   import { onDestroy } from 'svelte';
-  import { t } from '../lib/i18n.js';
+  import { t, tiempo } from '../lib/i18n.js';
   import { online, asegurarSesionAnonima } from '../lib/stores.js';
   import { crearRecurso, suscribirRecursos, leerNecesidadesPublicas, leerRecursosPublicos } from '../lib/db.js';
   import LugarAutocomplete from '../components/LugarAutocomplete.svelte';
@@ -143,6 +143,7 @@
           </div>
           <div style="font-weight:600">{r.sector}</div>
           {#if r.descripcion}<p style="margin:.3rem 0">{r.descripcion}</p>{/if}
+          {#if $tiempo.rel(r.creada_en)}<p class="sello" class:viejo={$tiempo.viejo(r.creada_en)} title={$tiempo.abs(r.creada_en)}>{$t('tiempo.subido')} {$tiempo.rel(r.creada_en)}</p>{/if}
         </div>
       {/each}
     {/if}
@@ -152,6 +153,8 @@
 <style>
   .mapa-titulo { font-weight: 700; margin: 0.9rem 0 0.2rem; }
   .pin-ok { color: var(--verde); font-weight: 600; }
+  .sello { margin: 0.25rem 0 0; font-size: 0.76rem; color: var(--gris); font-variant-numeric: tabular-nums; }
+  .sello.viejo { color: #b45309; }
   .enlace-ocultar {
     background: none; border: none; min-height: 0; padding: 0.35rem 0;
     color: var(--gris); text-decoration: underline; font-size: 0.85rem;

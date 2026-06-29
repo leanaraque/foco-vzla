@@ -1,5 +1,5 @@
 <script>
-  import { t, textoNec } from '../lib/i18n.js';
+  import { t, textoNec, tiempo } from '../lib/i18n.js';
   import { reclamar, resolver, reabrir, verificar, invalidar, leerContacto } from '../lib/db.js';
 
   export let n; // necesidad
@@ -35,6 +35,12 @@
   <!-- Procesado §25: prefiere el resumen estandarizado/anclado (claro y sin PII); si
        aún no se procesó, cae al texto crudo de la fuente. -->
   {#if $textoNec(n)}<p class="desc">{$textoNec(n)}</p>{/if}
+
+  {#if $tiempo.rel(n.creada_en)}
+    <p class="sello" class:viejo={$tiempo.viejo(n.creada_en)} title={$tiempo.abs(n.creada_en)}>
+      {$t('tiempo.subido')} {$tiempo.rel(n.creada_en)}
+    </p>
+  {/if}
 
   {#if n.reclamada_por}
     <p class="ayuda">{$t('reclamada_por')}: <code>{n.reclamada_por.slice(0, 6)}</code></p>
@@ -85,6 +91,9 @@
 <style>
   .sector { font-weight: 600; margin-bottom: 0.2rem; }
   .desc { margin: 0.3rem 0; }
+  /* Sello de frescura: cuándo se subió el reporte (lectura limpia: nuevo vs. antiguo). */
+  .sello { margin: 0.25rem 0 0; font-size: 0.78rem; color: var(--gris); font-variant-numeric: tabular-nums; }
+  .sello.viejo { color: #b45309; }
   .contacto-box { background: var(--gris-claro); padding: 0.5rem 0.7rem; border-radius: var(--radio); margin: 0.5rem 0; }
   .contacto-box a { display: inline-block; margin-left: 0.5rem; }
   code { background: var(--gris-claro); padding: 0 0.3rem; border-radius: 4px; }

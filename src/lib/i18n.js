@@ -4,6 +4,7 @@
 // selector (App.svelte). La clave faltante cae al texto en español (no a la clave
 // cruda) para que un hueco de traducción nunca muestre algo ilegible.
 import { writable, derived } from 'svelte/store';
+import { relativo as relativoTiempo, absoluta as absolutaTiempo, esViejo } from './tiempo.js';
 
 const diccionarios = {
   es: {
@@ -382,7 +383,9 @@ const diccionarios = {
     // Tiempo relativo (unidades y prefijo/sufijo)
     'tiempo.min': 'min',
     'tiempo.h': 'h',
-    'tiempo.d': 'd'
+    'tiempo.d': 'd',
+    'tiempo.subido': 'Subido',
+    'tiempo.actualizado': 'Actualizado'
   },
 
   en: {
@@ -742,7 +745,9 @@ const diccionarios = {
 
     'tiempo.min': 'min',
     'tiempo.h': 'h',
-    'tiempo.d': 'd'
+    'tiempo.d': 'd',
+    'tiempo.subido': 'Uploaded',
+    'tiempo.actualizado': 'Updated'
   }
 };
 
@@ -780,6 +785,15 @@ export const t = derived(locale, ($locale) => {
   // Hueco de traducción → cae al español (legible), nunca a la clave cruda.
   return (clave) => dic[clave] ?? diccionarios.es[clave] ?? clave;
 });
+
+// Sello de frescura localizado: `$tiempo.rel(ts)` → "subido hace 2 h" relativo,
+// `$tiempo.abs(ts)` → fecha absoluta para el title, `$tiempo.viejo(ts)` → matiz visual.
+// Derivado del idioma para reaccionar al cambiar locale, igual que `t`/`textoNec`.
+export const tiempo = derived(locale, ($locale) => ({
+  rel: (ts) => relativoTiempo(ts, $locale),
+  abs: (ts) => absolutaTiempo(ts, $locale),
+  viejo: (ts, horas = 24) => esViejo(ts, horas)
+}));
 
 // Texto de una necesidad según idioma: en inglés prefiere `resumen_en` (traducción del
 // pipeline, §Fase B) y cae a `resumen`/`descripcion` (español) si aún no está traducida.
