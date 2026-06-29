@@ -336,8 +336,14 @@
   .tipo { display: flex; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
   .tipo button { flex: 1; border: none; border-radius: 0; background: #fff; min-height: 42px; font-weight: 600; }
   .tipo button.on { background: var(--azul); color: #fff; }
-  .selects { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; }
-  .selects select { min-height: 42px; padding: 0.4rem 0.5rem; }
+  /* Mobile-first: 4 filtros en una rejilla 2×2 limpia (sin huérfanos). En pantallas
+     anchas pasan a una sola fila de 4. Así no se aprieta en móvil ni desbalancea en
+     escritorio. */
+  .selects { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .selects select { min-height: 42px; padding: 0.4rem 0.5rem; min-width: 0; width: 100%; }
+  @media (min-width: 600px) {
+    .selects { grid-template-columns: repeat(4, 1fr); }
+  }
   .meta { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
   .cuenta { color: var(--gris); font-size: 0.85rem; }
   .cuenta b { color: var(--texto); }
