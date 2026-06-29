@@ -5,6 +5,7 @@
   // (Resend) para avisar a un coordinador. Reutiliza MapaUnificado. Mobile-first.
   import { onMount, onDestroy } from 'svelte';
   import { t, textoNec, tiempo } from '../lib/i18n.js';
+  import { aFecha } from '../lib/tiempo.js';
   import { app } from '../lib/firebase.js';
   import { normaliza } from '../lib/autocomplete.js';
   import { asegurarSesionAnonima } from '../lib/stores.js';
@@ -19,11 +20,23 @@
   let enfocado = null;            // { id, t } → MapaUnificado vuela al punto
 
   // --- Filtros (control de capas + triaje) ---
-  let busca = '', fTipo = 'todo', fCat = '', fUrg = '', fEstado = '';
+  let busca = '', fTipo = 'todo', fCat = '', fUrg = '', fEstado = '', fFecha = '';
   const categorias = ['rescate', 'medico', 'agua', 'alimento', 'refugio', 'transporte', 'acopio', 'servicios', 'otro'];
   const urgencias = ['critica', 'alta', 'media'];
   const estados = ['sin_atender', 'asignada', 'resuelta'];
-  const limpiar = () => { busca = ''; fTipo = 'todo'; fCat = ''; fUrg = ''; fEstado = ''; };
+  // Filtro por ANTIGÜEDAD (frescura): la pregunta clave en una emergencia es "¿qué es
+  // nuevo?". Buckets de recencia sobre `creada_en` (cuándo se subió), no un date-picker
+  // (los datos abarcan pocos días). Aplica a necesidades Y recursos.
+  const fechas = [
+    { k: '1h', h: 1 },
+    { k: '6h', h: 6 },
+    { k: '24h', h: 24 },
+    { k: '72h', h: 72 },
+    { k: '7d', h: 24 * 7 }
+  ];
+  const horasFecha = (k) => (fechas.find((f) => f.k === k)?.h ?? 0);
+  const dentroDe = (ts, cutoff) => { const d = aFecha(ts); return d ? d.getTime() >= cutoff : false; };
+  const limpiar = () => { busca = ''; fTipo = 'todo'; fCat = ''; fUrg = ''; fEstado = ''; fFecha = ''; };
 
   const qn = (s) => normaliza(s || '');
   $: q = qn(busca);
@@ -38,16 +51,22 @@
     );
   }
 
+  // Corte de antigüedad: se recalcula al cambiar `fFecha` (referenciado en los bloques
+  // de filtrado para que Svelte rastree la dependencia y recompute, sin gotcha oculto).
+  $: cutoffFecha = fFecha ? Date.now() - horasFecha(fFecha) * 3600000 : 0;
+
   // q se referencia DIRECTAMENTE aquí para que Svelte recompute al teclear (el bug
   // anterior era que la comparación vivía en una función y no se rastreaba).
   $: necFiltradas = (fTipo === 'rec') ? [] : triar(items.filter((n) =>
     (!fCat || n.categoria === fCat) &&
     (!fUrg || n.urgencia === fUrg) &&
     (!fEstado || (n.estado || 'sin_atender') === fEstado) &&
+    (!fFecha || dentroDe(n.creada_en, cutoffFecha)) &&
     (q.length < 2 || qn(`${n.sector} ${n.resumen || ''} ${n.resumen_en || ''} ${n.descripcion} ${n.categoria} ${n.urgencia}`).includes(q))
   ));
   $: recFiltrados = (fTipo === 'nec' || fUrg || fEstado) ? [] : recursos.filter((r) =>
     (!fCat || r.categoria === fCat) &&
+    (!fFecha || dentroDe(r.creada_en, cutoffFecha)) &&
     (q.length < 2 || qn(`${r.sector} ${r.descripcion} ${r.categoria}`).includes(q))
   );
   $: totalMostrado = necFiltradas.length + recFiltrados.length;
@@ -196,6 +215,10 @@
       <select name="estado" bind:value={fEstado} disabled={fTipo === 'rec'} aria-label={$t('filtro.estado_todos')}>
         <option value="">{$t('filtro.estado_todos')}</option>
         {#each estados as e}<option value={e}>{$t('estado.' + e)}</option>{/each}
+      </select>
+      <select name="fecha" bind:value={fFecha} aria-label={$t('filtro.fecha_todas')}>
+        <option value="">{$t('filtro.fecha_todas')}</option>
+        {#each fechas as f}<option value={f.k}>{$t('filtro.fecha_' + f.k)}</option>{/each}
       </select>
     </div>
     <div class="meta">
