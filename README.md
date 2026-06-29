@@ -1,5 +1,7 @@
 # FOCO — Coordinación de ayuda ciudadana
 
+**Español** · [English summary](#in-english-summary)
+
 PWA offline-first para coordinar ayuda tras una emergencia. Convierte reportes
 dispersos en una **vista pública, viva y filtrable** de qué se necesita, dónde y
 con qué urgencia — y un flujo de reporte ultraligero para quien está en terreno.
@@ -10,6 +12,35 @@ Construida como respuesta al doblete sísmico de Venezuela (24 jun 2026).
 > No reemplaza a bomberos, Protección Civil ni al 911. Ante peligro inmediato,
 > contacta a las líneas oficiales. FOCO **coordina** ayuda ciudadana; no despacha
 > rescates ni garantiza respuesta.
+
+---
+
+## In English (summary)
+
+FOCO is an offline-first PWA to coordinate help after an emergency. It turns
+scattered reports into a **public, live, filterable view** of what is needed,
+where and how urgently — plus an ultra-light reporting flow for people on the
+ground. Built in response to Venezuela's earthquake doublet (Jun 24, 2026).
+
+**FOCO is NOT an emergency service.** It does not replace firefighters, civil
+protection or emergency lines. It *coordinates* citizen aid; it does not dispatch
+rescues or guarantee a response.
+
+- **The web app is bilingual (Spanish / English).** Language auto-detects from the
+  browser and can be switched with the ES/EN toggle in the header; the preference
+  is remembered. Place names and source descriptions stay in Spanish (data); need
+  summaries are translated to English in the pipeline (`resumen_en`) and shown
+  according to the selected language.
+- **Two audiences:** people who *help* (rescuers, brigades, donors) use the home
+  (`/`) and operational map (`/mapa`); people who *report / are affected* use
+  `/reportar` and `/recursos`.
+- **Privacy by design:** contact info and exact coordinates live in a private
+  subdocument readable only by verified coordinators; public location is at
+  sector level (~1 km).
+- **Open data API:** read-only JSON/CSV at `/api` (see `/api.html`), no personal
+  data, with an English summary field (`descripcion_en`).
+- **Run your own / contribute:** see the Spanish sections below, `CONTRIBUTING.md`
+  and `MVP-Spec-Mapa-Ayuda-Venezuela.md`. The stack is Vite + Svelte + Firebase.
 
 ## Para quién es
 

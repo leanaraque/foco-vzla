@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FOCO Venezuela — API de datos abiertos</title>
-  <meta name="description" content="API pública de datos abiertos de FOCO Venezuela: necesidades y recursos tras el sismo, en JSON y CSV. Solo lectura, sin datos personales." />
+  <title>FOCO Venezuela — API de datos abiertos / Open data API</title>
+  <meta name="description" content="API pública de datos abiertos de FOCO Venezuela: necesidades y recursos tras el sismo, en JSON y CSV. Solo lectura, sin datos personales. / Public open-data API: needs and resources, JSON and CSV, read-only, no personal data." />
   <style>
     :root { --azul: #0b3d5c; --gris: #5b6670; --borde: #e2e6ea; --bg: #f7f9fb; --rojo: #e63946; }
     * { box-sizing: border-box; }
@@ -14,6 +14,7 @@
     }
     .wrap { max-width: 760px; margin: 0 auto; padding: 1.4rem 1.1rem 4rem; }
     header { border-bottom: 2px solid var(--azul); padding-bottom: 0.8rem; margin-bottom: 1.4rem; }
+    .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
     h1 { font-size: 1.5rem; margin: 0 0 0.2rem; color: var(--azul); }
     .sub { color: var(--gris); font-size: 0.95rem; }
     h2 { font-size: 1.12rem; margin: 1.8rem 0 0.6rem; color: var(--azul); }
@@ -37,43 +38,78 @@
       text-decoration: none; font-size: 0.88rem; font-weight: 600;
     }
     footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--borde); font-size: 0.85rem; color: var(--gris); }
+    /* Selector de idioma (mismo patrón que la app) */
+    .idioma { display: inline-flex; border: 1px solid var(--azul); border-radius: 999px; overflow: hidden; flex: none; }
+    .idioma button {
+      background: #fff; border: none; color: var(--azul); font-weight: 700; font-size: 0.78rem;
+      letter-spacing: 0.3px; padding: 0.28rem 0.6rem; cursor: pointer;
+    }
+    .idioma button.activo { background: var(--azul); color: #fff; }
+    /* Conmutación de idioma: se muestra solo el bloque del idioma activo. */
+    html[lang="es"] [data-lang="en"], html[lang="en"] [data-lang="es"] { display: none; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>FOCO Venezuela — API de datos abiertos</h1>
-      <div class="sub">Datos públicos de necesidades y recursos tras el doblete sísmico. Solo lectura, sin datos personales.</div>
+      <div class="top">
+        <div>
+          <h1 data-lang="es">FOCO Venezuela — API de datos abiertos</h1>
+          <h1 data-lang="en">FOCO Venezuela — Open data API</h1>
+          <div class="sub" data-lang="es">Datos públicos de necesidades y recursos tras el doblete sísmico. Solo lectura, sin datos personales.</div>
+          <div class="sub" data-lang="en">Public data on needs and resources after the earthquake doublet. Read-only, no personal data.</div>
+        </div>
+        <div class="idioma" role="group" aria-label="Idioma / Language">
+          <button type="button" id="btn-es">ES</button>
+          <button type="button" id="btn-en">EN</button>
+        </div>
+      </div>
     </header>
 
-    <div class="aviso">
+    <div class="aviso" data-lang="es">
       <strong>No es un servicio de emergencia.</strong> FOCO coordina información de ayuda ciudadana; no garantiza respuesta ni rescate. Ante peligro inmediato, contacta a las autoridades.
     </div>
+    <div class="aviso" data-lang="en">
+      <strong>Not an emergency service.</strong> FOCO coordinates citizen-aid information; it does not guarantee a response or rescue. In case of immediate danger, contact the authorities.
+    </div>
 
-    <p>
+    <p data-lang="es">
       Estos datos son abiertos para que medios, ONGs, otros mapas e investigadores los usen.
       <strong>Uso libre con atribución a <a href="https://focovenezuela.org">focovenezuela.org</a>.</strong>
       Las respuestas se sirven sobre <code>HTTPS</code>, con <code>CORS</code> abierto y cacheadas ~5 minutos.
     </p>
+    <p data-lang="en">
+      This data is open for use by media, NGOs, other maps and researchers.
+      <strong>Free to use with attribution to <a href="https://focovenezuela.org">focovenezuela.org</a>.</strong>
+      Responses are served over <code>HTTPS</code>, with open <code>CORS</code> and cached for ~5 minutes.
+    </p>
 
-    <h2>Endpoints</h2>
+    <h2 data-lang="es">Endpoints</h2>
+    <h2 data-lang="en">Endpoints</h2>
     <table>
-      <thead><tr><th>Recurso</th><th>Formato</th><th>URL</th></tr></thead>
+      <thead>
+        <tr data-lang="es"><th>Recurso</th><th>Formato</th><th>URL</th></tr>
+        <tr data-lang="en"><th>Resource</th><th>Format</th><th>URL</th></tr>
+      </thead>
       <tbody>
-        <tr><td>Necesidades</td><td>JSON</td><td><a href="/api/necesidades.json"><code>/api/necesidades.json</code></a></td></tr>
-        <tr><td>Necesidades</td><td>CSV</td><td><a href="/api/necesidades.csv"><code>/api/necesidades.csv</code></a></td></tr>
-        <tr><td>Recursos</td><td>JSON</td><td><a href="/api/recursos.json"><code>/api/recursos.json</code></a></td></tr>
-        <tr><td>Recursos</td><td>CSV</td><td><a href="/api/recursos.csv"><code>/api/recursos.csv</code></a></td></tr>
-        <tr><td>Índice</td><td>JSON</td><td><a href="/api/"><code>/api/</code></a></td></tr>
+        <tr><td><span data-lang="es">Necesidades</span><span data-lang="en">Needs</span></td><td>JSON</td><td><a href="/api/necesidades.json"><code>/api/necesidades.json</code></a></td></tr>
+        <tr><td><span data-lang="es">Necesidades</span><span data-lang="en">Needs</span></td><td>CSV</td><td><a href="/api/necesidades.csv"><code>/api/necesidades.csv</code></a></td></tr>
+        <tr><td><span data-lang="es">Recursos</span><span data-lang="en">Resources</span></td><td>JSON</td><td><a href="/api/recursos.json"><code>/api/recursos.json</code></a></td></tr>
+        <tr><td><span data-lang="es">Recursos</span><span data-lang="en">Resources</span></td><td>CSV</td><td><a href="/api/recursos.csv"><code>/api/recursos.csv</code></a></td></tr>
+        <tr><td><span data-lang="es">Índice</span><span data-lang="en">Index</span></td><td>JSON</td><td><a href="/api/"><code>/api/</code></a></td></tr>
       </tbody>
     </table>
 
-    <div class="nota">
-      <strong>Privacidad.</strong> La API <em>nunca</em> expone contacto ni coordenadas exactas (viven aparte, solo visibles para coordinadores verificados). La ubicación es a <strong>nivel de sector (~1&nbsp;km)</strong>, salvo sitios públicos como edificios dañados, donde <code>precision</code> es <code>"exacta"</code>. El texto usa un resumen saneado de datos personales cuando está disponible.
+    <div class="nota" data-lang="es">
+      <strong>Privacidad.</strong> La API <em>nunca</em> expone contacto ni coordenadas exactas (viven aparte, solo visibles para coordinadores verificados). La ubicación es a <strong>nivel de sector (~1&nbsp;km)</strong>, salvo sitios públicos como edificios dañados, donde <code>precision</code> es <code>"exacta"</code>. El texto usa un resumen saneado de datos personales cuando está disponible; <code>descripcion_en</code> trae la versión en inglés cuando existe.
+    </div>
+    <div class="nota" data-lang="en">
+      <strong>Privacy.</strong> The API <em>never</em> exposes contact info or exact coordinates (these live apart, visible only to verified coordinators). Location is at <strong>sector level (~1&nbsp;km)</strong>, except for public sites such as damaged buildings, where <code>precision</code> is <code>"exacta"</code>. The text uses a PII-sanitized summary when available; <code>descripcion_en</code> carries the English version when present.
     </div>
 
-    <h2>Campos — necesidad</h2>
-    <table>
+    <h2 data-lang="es">Campos — necesidad</h2>
+    <h2 data-lang="en">Fields — need</h2>
+    <table data-lang="es">
       <thead><tr><th>Campo</th><th>Descripción</th></tr></thead>
       <tbody>
         <tr><td><code>id</code></td><td>Identificador estable del punto.</td></tr>
@@ -83,14 +119,33 @@
         <tr><td><code>rescate_activo</code></td><td><code>true</code> si hay rescate activo reportado.</td></tr>
         <tr><td><code>estado</code> · <code>verificacion</code></td><td>Estado operativo y nivel de verificación (confirmación ciudadana / coordinador).</td></tr>
         <tr><td><code>precision</code></td><td><code>exacta</code> (sitio público) o <code>sector</code> (~1&nbsp;km, personas).</td></tr>
-        <tr><td><code>sector</code> · <code>descripcion</code></td><td>Referencia textual y resumen saneado de PII.</td></tr>
+        <tr><td><code>sector</code> · <code>descripcion</code></td><td>Referencia textual y resumen saneado de PII (español).</td></tr>
+        <tr><td><code>descripcion_en</code></td><td>Traducción al inglés del resumen, cuando está disponible (si no, cadena vacía).</td></tr>
         <tr><td><code>lat</code> · <code>lng</code> · <code>geohash</code></td><td>Ubicación pública (a nivel sector salvo <code>precision: "exacta"</code>).</td></tr>
         <tr><td><code>fuentes</code></td><td>Sistemas de procedencia del dato.</td></tr>
         <tr><td><code>creada_en</code> · <code>actualizada_en</code></td><td>Marcas de tiempo ISO-8601 (UTC).</td></tr>
       </tbody>
     </table>
+    <table data-lang="en">
+      <thead><tr><th>Field</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>Stable identifier of the point.</td></tr>
+        <tr><td><code>categoria</code></td><td><code>rescate</code>, <code>medico</code>, <code>agua</code>, <code>alimento</code>, <code>refugio</code>, <code>servicios</code>, <code>otro</code> (values stay in Spanish).</td></tr>
+        <tr><td><code>urgencia</code></td><td><code>critica</code>, <code>alta</code>, <code>media</code>.</td></tr>
+        <tr><td><code>severidad</code> · <code>prioridad</code></td><td>Damage severity and system-derived priority (0–100).</td></tr>
+        <tr><td><code>rescate_activo</code></td><td><code>true</code> if an active rescue is reported.</td></tr>
+        <tr><td><code>estado</code> · <code>verificacion</code></td><td>Operational status and verification level (citizen / coordinator confirmation).</td></tr>
+        <tr><td><code>precision</code></td><td><code>exacta</code> (public site) or <code>sector</code> (~1&nbsp;km, people).</td></tr>
+        <tr><td><code>sector</code> · <code>descripcion</code></td><td>Text reference and PII-sanitized summary (Spanish).</td></tr>
+        <tr><td><code>descripcion_en</code></td><td>English translation of the summary, when available (empty string otherwise).</td></tr>
+        <tr><td><code>lat</code> · <code>lng</code> · <code>geohash</code></td><td>Public location (sector level unless <code>precision: "exacta"</code>).</td></tr>
+        <tr><td><code>fuentes</code></td><td>Source systems the datum came from.</td></tr>
+        <tr><td><code>creada_en</code> · <code>actualizada_en</code></td><td>ISO-8601 timestamps (UTC).</td></tr>
+      </tbody>
+    </table>
 
-    <h2>Ejemplo</h2>
+    <h2 data-lang="es">Ejemplo</h2>
+    <h2 data-lang="en">Example</h2>
     <pre>fetch('https://focovenezuela.org/api/necesidades.json')
   .then(r =&gt; r.json())
   .then(d =&gt; {
@@ -100,20 +155,49 @@
     }
   });</pre>
 
-    <h2>Notas de uso</h2>
-    <p>
+    <h2 data-lang="es">Notas de uso</h2>
+    <h2 data-lang="en">Usage notes</h2>
+    <p data-lang="es">
       Solo lectura (<code>GET</code>). Las respuestas se cachean ~5 minutos: no consultes con una
       frecuencia mayor. Las necesidades duplicadas (depuradas por el curador) no se incluyen.
     </p>
+    <p data-lang="en">
+      Read-only (<code>GET</code>). Responses are cached for ~5 minutes: do not poll more often.
+      Duplicate needs (deduplicated by the curator) are not included.
+    </p>
 
     <div class="pills">
-      <a href="/">Volver al mapa</a>
-      <a href="https://github.com/leanaraque/foco-vzla" target="_blank" rel="noopener">Código abierto</a>
+      <a href="/"><span data-lang="es">Volver al mapa</span><span data-lang="en">Back to the map</span></a>
+      <a href="https://github.com/leanaraque/foco-vzla" target="_blank" rel="noopener"><span data-lang="es">Código abierto</span><span data-lang="en">Open source</span></a>
     </div>
 
     <footer>
-      FOCO Venezuela · La ayuda se organiza entre todos · datos abiertos con atribución.
+      <span data-lang="es">FOCO Venezuela · La ayuda se organiza entre todos · datos abiertos con atribución.</span>
+      <span data-lang="en">FOCO Venezuela · Aid, organized by all of us · open data with attribution.</span>
     </footer>
   </div>
+
+  <script>
+    // Idioma: comparte la preferencia con la app (clave foco_locale) y autodetecta por
+    // navigator.language. Sin dependencias: alterna la visibilidad de los bloques [data-lang].
+    (function () {
+      var KEY = 'foco_locale';
+      function detectar() {
+        try { var g = localStorage.getItem(KEY); if (g === 'es' || g === 'en') return g; } catch (e) {}
+        try { return (navigator.language || 'es').toLowerCase().indexOf('en') === 0 ? 'en' : 'es'; } catch (e) { return 'es'; }
+      }
+      var btnEs = document.getElementById('btn-es');
+      var btnEn = document.getElementById('btn-en');
+      function aplicar(l) {
+        document.documentElement.lang = l;
+        btnEs.classList.toggle('activo', l === 'es');
+        btnEn.classList.toggle('activo', l === 'en');
+        try { localStorage.setItem(KEY, l); } catch (e) {}
+      }
+      btnEs.addEventListener('click', function () { aplicar('es'); });
+      btnEn.addEventListener('click', function () { aplicar('en'); });
+      aplicar(detectar());
+    })();
+  </script>
 </body>
 </html>

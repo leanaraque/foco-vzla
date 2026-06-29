@@ -124,13 +124,26 @@ export const api = onRequest({ region: 'us-central1', memory: '256MiB' }, async 
       res.send(aCsv(items, COLS_REC));
       return;
     }
-    // Índice de la API (root /api): describe los endpoints disponibles.
+    // Índice de la API (root /api): describe los endpoints disponibles. Bilingüe:
+    // `?lang=en` devuelve la descripción en inglés (por defecto, español).
     const base = `${req.protocol}://${req.get('host')}/api`;
+    const en = String(req.query.lang || '').toLowerCase().startsWith('en');
+    const meta = en
+      ? {
+          nombre: 'FOCO Venezuela — public open-data API',
+          descripcion: 'Public data on needs and resources after the earthquake. Read-only, no personal data. Location at sector level (~1km) except public sites (precision=exacta). Field descripcion_en carries the English summary when available.',
+          licencia: 'Free to use with attribution to focovenezuela.org. Not an emergency service.',
+          cache: 'Responses cached ~5 min.'
+        }
+      : {
+          nombre: 'FOCO Venezuela — API pública de datos abiertos',
+          descripcion: 'Datos públicos de necesidades y recursos tras el sismo. Solo lectura, sin datos personales. Ubicación a nivel de sector (~1km) salvo sitios públicos (precision=exacta). El campo descripcion_en trae el resumen en inglés cuando está disponible.',
+          licencia: 'Uso libre con atribución a focovenezuela.org. No es un servicio de emergencia.',
+          cache: 'Respuestas cacheadas ~5 min.'
+        };
     res.json({
-      nombre: 'FOCO Venezuela — API pública de datos abiertos',
-      descripcion: 'Datos públicos de necesidades y recursos tras el sismo. Solo lectura, sin datos personales. Ubicación a nivel de sector (~1km) salvo sitios públicos (precision=exacta).',
-      licencia: 'Uso libre con atribución a focovenezuela.org. No es un servicio de emergencia.',
-      cache: 'Respuestas cacheadas ~5 min.',
+      ...meta,
+      idiomas: ['es', 'en'],
       endpoints: {
         necesidades_json: `${base}/necesidades.json`,
         necesidades_csv: `${base}/necesidades.csv`,
