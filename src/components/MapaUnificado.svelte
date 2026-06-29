@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy, createEventDispatcher } from 'svelte';
-  import { t } from '../lib/i18n.js';
+  import { t, textoNec } from '../lib/i18n.js';
 
   // UN SOLO mapa para toda la app: muestra necesidades y recursos como marcadores,
   // y opcionalmente un PIN arrastrable (modo reporte). Mismo estilo/tiles siempre.
@@ -71,7 +71,7 @@
       const activo = n.rescate_activo === true;
       const color = activo ? '#e63946' : (colorUrg[n.urgencia] || '#1666a0');
       const m = L.marker([n.geo.lat, n.geo.lng], { icon: dotIcon(color, activo), pane: 'necPane', _activo: activo, _grupo: 'nec' });
-      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc(n.resumen || n.descripcion || '')}${accionesHtml(n)}`);
+      m.bindPopup(`<b>${esc(n.sector || '')}</b><br>${$t('cat.' + n.categoria) || n.categoria} · ${$t('urg.' + n.urgencia) || n.urgencia}${activo ? ' · SOS' : ''}<br>${esc($textoNec(n))}${accionesHtml(n)}`);
       if (n.id) markerPorId.set(n.id, m);
       mN.push(m);
       pts.push([n.geo.lat, n.geo.lng]);

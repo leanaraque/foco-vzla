@@ -5,7 +5,7 @@
   //   - exacta (edificio/sitio público): la coord pública es EXACTA (no se redondea).
   //   - sector (persona): pública aproximada (~1km) + exacta solo al subdoc privado (§9-1).
   import { createEventDispatcher } from 'svelte';
-  import { t } from '../lib/i18n.js';
+  import { t, textoNec } from '../lib/i18n.js';
   import { aplicarEdicionNecesidad } from '../lib/db.js';
   import { geoPublico, geohashForLocation } from '../lib/geo.js';
   import { CENTRO_ZONA } from '../lib/zona.js';
@@ -65,7 +65,7 @@
   </div>
 
   <strong class="sector">{n.sector || '—'}</strong>
-  {#if n.resumen || n.descripcion}<p class="desc">{n.resumen || n.descripcion}</p>{/if}
+  {#if $textoNec(n)}<p class="desc">{$textoNec(n)}</p>{/if}
   <p class="coord">{$t('ubic.coord_actual')}: <code>{n.geo?.lat?.toFixed(4)}, {n.geo?.lng?.toFixed(4)}</code></p>
 
   {#if error}<div class="aviso-error" role="alert">{error}</div>{/if}

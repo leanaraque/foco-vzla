@@ -70,6 +70,55 @@ export function construirEntradaIA(record = {}, campos = {}) {
   return `Campos estructurados (verdad):\n${JSON.stringify(datos)}\n\nTexto original (ya sin datos personales):\n${cap(limpio, 600)}`;
 }
 
+// === TRADUCCIÓN AL INGLÉS (§i18n datos) ====================================
+// Traduce el `resumen` YA SANEADO (sin PII, ya pasado por la guarda anti-muerte en
+// español) al inglés. La entrada es segura por construcción; aun así se reaplica la
+// guarda anti-muerte EN INGLÉS sobre la salida: una traducción no debe introducir
+// una afirmación de muerte no fundada. Sin IA o ante cualquier fallo/sospecha,
+// devuelve vacío → la UI/API caen al `resumen` español (degradación segura).
+const SYSTEM_TRADUCCION = [
+  'You translate short earthquake-emergency summaries from Spanish to English for rescuers.',
+  'STRICT RULES (life-or-death, source of truth):',
+  '1. Translate ONLY what the text says. Never add, infer or omit facts (number trapped, affected, severity, etc.).',
+  '2. Never include personal data (names, ID numbers, phone numbers).',
+  '3. Natural English, 1 sentence, keep it as short as the original. Keep place names as-is.',
+  '4. Never state or imply that people are dead, deceased or "lifeless" unless the Spanish text says so EXPLICITLY.',
+  '5. Return ONLY the translation, with no preamble, no quotes, no "Translation:".'
+].join('\n');
+
+// Guarda anti-muerte en inglés (espejo de RE_MUERTE). Patrones que afirman/insinúan
+// muerte o ausencia de vida. Términos positivos ("signs of life") NO caen.
+const RE_MUERTE_EN = /\bno signs? of life\b|\blifeless\b|\bdeceased\b|\bdead\b|\bfatalit(?:y|ies)\b|\bcadaver\b|\bcorpse\b|\bperished\b|\bcasualt(?:y|ies)\b/i;
+export const afirmaMuerteNoFundadaEN = (texto, campos = {}) =>
+  RE_MUERTE_EN.test(String(texto || '')) && !(campos.senales && campos.senales.fallecidos);
+
+export async function traducirResumenEN(resumenEs, campos = {}, { apiKey, fetchImpl = fetch, modelo = MODELO_RESUMEN } = {}) {
+  const base = String(resumenEs || '').trim();
+  if (!apiKey || !base) return { resumen_en: '', via: 'ninguno', ok: false };
+  try {
+    const r = await fetchImpl('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: modelo, max_tokens: 200, temperature: 0,
+        system: SYSTEM_TRADUCCION,
+        messages: [{ role: 'user', content: base }]
+      })
+    });
+    if (!r.ok) return { resumen_en: '', via: 'ninguno', ok: false };
+    const j = await r.json();
+    let texto = (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
+    texto = texto.replace(/^["“']|["”']$/g, '').replace(/^translation:\s*/i, '').trim();
+    // Guarda final: PII, vacío/larguísimo, o AFIRMA MUERTE no fundada → descarta.
+    if (!texto || texto.length > 280 || scrubPII(texto).tienePII || afirmaMuerteNoFundadaEN(texto, campos)) {
+      return { resumen_en: '', via: 'ninguno', ok: false };
+    }
+    return { resumen_en: texto, via: 'ia', ok: true };
+  } catch (_) {
+    return { resumen_en: '', via: 'ninguno', ok: false };
+  }
+}
+
 // Llama a la API de Mensajes (fetch crudo, como Resend). Devuelve { resumen, via, ok }.
 // Anclado: temp 0, max_tokens corto. Valida la salida (no PII, longitud) o cae al
 // determinista. Nunca lanza: ante cualquier fallo devuelve el determinista.

@@ -37,6 +37,7 @@ function necPublica(id, n) {
     precision: n.precision || 'sector',      // 'exacta' (sitio/edificio) | 'sector' (~1km)
     sector: n.sector || '',
     descripcion: n.resumen || n.descripcion || '',
+    descripcion_en: n.resumen_en || '',   // traducción al inglés del resumen (vacío si no disponible)
     lat: n.geo && Number.isFinite(n.geo.lat) ? n.geo.lat : null,
     lng: n.geo && Number.isFinite(n.geo.lng) ? n.geo.lng : null,
     geohash: n.geo && n.geo.geohash ? n.geo.geohash : null,
@@ -84,7 +85,7 @@ function aCsv(items, cols) {
 }
 
 const COLS_NEC = ['id', 'categoria', 'urgencia', 'severidad', 'prioridad', 'rescate_activo',
-  'estado', 'verificacion', 'confirmaciones', 'precision', 'sector', 'descripcion',
+  'estado', 'verificacion', 'confirmaciones', 'precision', 'sector', 'descripcion', 'descripcion_en',
   'lat', 'lng', 'geohash', 'creada_en', 'actualizada_en'];
 const COLS_REC = ['id', 'categoria', 'sector', 'descripcion', 'disponible', 'precision',
   'lat', 'lng', 'geohash', 'creada_en'];

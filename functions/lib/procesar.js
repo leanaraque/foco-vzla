@@ -9,11 +9,13 @@
 import { fnv1a } from './identidad.js';
 import { extraer } from './extraer.js';
 import { enriquecer } from './geoenrich.js';
-import { resumenIA } from './resumen.js';
+import { resumenIA, traducirResumenEN } from './resumen.js';
 import { geoPublico, geoExacto } from './geo.js';
 import { inVzla } from './geocode.js';
 
-export const VERSION = 'p1';
+// p2: añade `resumen_en` (traducción al inglés del resumen). Subir la versión fuerza
+// el reproceso global para backfillear el nuevo campo en los docs ya procesados.
+export const VERSION = 'p2';
 
 export function hashContenido(rec = {}) {
   const g = rec.geo || {};
@@ -38,13 +40,17 @@ export async function procesarUno(rec, { apiKey, geocodeImpl, fetchImpl, ahoraTs
     ? { geo: { lat: rec.geo.lat, lng: rec.geo.lng }, confianza: 'alta', revisar: false, fuente_geo: 'fuente_exacta', movimiento_m: 0 }
     : await enriquecer(rec, { geocodeImpl });
   const res = await resumenIA(rec, campos, { apiKey, fetchImpl });
+  // Traducción al inglés del resumen ya saneado (datos bilingües). Degradación segura:
+  // si falla, queda '' y la UI/API caen al resumen español.
+  const tr = await traducirResumenEN(res.resumen, campos, { apiKey, fetchImpl });
 
   const patch = {
     resumen: res.resumen,
+    resumen_en: tr.resumen_en,
     severidad: campos.severidad,
     rescate_activo: campos.rescate_activo,
     actualizada_en: ahoraTs,
-    procesado: { hash: hashContenido(rec), en: ahoraTs, resumen_via: res.via, geo_conf: geoDec.confianza, geo_fuente: geoDec.fuente_geo }
+    procesado: { hash: hashContenido(rec), en: ahoraTs, resumen_via: res.via, resumen_en_via: tr.via, geo_conf: geoDec.confianza, geo_fuente: geoDec.fuente_geo }
   };
   if (campos.rescate) patch.rescate = campos.rescate;
   if (Number.isFinite(campos.afectados)) patch.afectados = campos.afectados;

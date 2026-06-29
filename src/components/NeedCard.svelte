@@ -1,5 +1,5 @@
 <script>
-  import { t } from '../lib/i18n.js';
+  import { t, textoNec } from '../lib/i18n.js';
   import { reclamar, resolver, reabrir, verificar, invalidar, leerContacto } from '../lib/db.js';
 
   export let n; // necesidad
@@ -34,7 +34,7 @@
   <div class="sector">{n.sector}</div>
   <!-- Procesado §25: prefiere el resumen estandarizado/anclado (claro y sin PII); si
        aún no se procesó, cae al texto crudo de la fuente. -->
-  {#if n.resumen || n.descripcion}<p class="desc">{n.resumen || n.descripcion}</p>{/if}
+  {#if $textoNec(n)}<p class="desc">{$textoNec(n)}</p>{/if}
 
   {#if n.reclamada_por}
     <p class="ayuda">{$t('reclamada_por')}: <code>{n.reclamada_por.slice(0, 6)}</code></p>
